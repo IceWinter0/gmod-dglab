@@ -151,6 +151,96 @@ pub fn inspect(client_base: usize) -> io::Result<String> {
     ))
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct PlayerOffsets {
+    pub health: usize,
+    pub max_health: Option<usize>,
+    pub life_state: usize,
+    pub armor: Option<usize>,
+}
+pub fn resolve_player(client_base: usize) -> io::Result<PlayerOffsets> {
+    let mut class = pointer(client_base + 0x95f748)?;
+    let mut visited = HashSet::new();
+    while class != 0 {
+        if visited.len() >= 2048 || !visited.insert(class) {
+            return Err(io::Error::other("玩家类链表无效"));
+        }
+        let data = native::read::<48>(class).ok_or_else(|| io::Error::other("玩家类记录不可读"))?;
+        let name = text(usize_at(&data, 16).ok_or_else(|| io::Error::other("玩家类名称无效"))?)?;
+        if name == "CGMOD_Player" {
+            return resolve_chain(
+                usize_at(&data, 24).ok_or_else(|| io::Error::other("玩家表无效"))?,
+                client_base,
+            );
+        }
+        class = usize_at(&data, 32).ok_or_else(|| io::Error::other("玩家类后继无效"))?;
+    }
+    Err(io::Error::other("未发现 CGMOD_Player，拒绝猜测玩家类型"))
+}
+fn resolve_chain(mut table: usize, client_base: usize) -> io::Result<PlayerOffsets> {
+    let mut visited = HashSet::new();
+    let (mut health, mut max_health, mut life_state, mut armor) = (None, None, None, None);
+    while table != 0 {
+        if visited.len() >= 32 || !visited.insert(table) {
+            return Err(io::Error::other("玩家继承表无效"));
+        }
+        let data = native::read::<40>(table).ok_or_else(|| io::Error::other("玩家继承表不可读"))?;
+        let props = usize_at(&data, 0).ok_or_else(|| io::Error::other("玩家属性指针无效"))?;
+        let count = i32_at(&data, 8)
+            .filter(|n| (0..=4096).contains(n))
+            .ok_or_else(|| io::Error::other("玩家属性数量无效"))?;
+        let mut parent = 0;
+        for index in 0..count as usize {
+            let data = native::read::<96>(
+                props
+                    .checked_add(index * 96)
+                    .ok_or_else(|| io::Error::other("属性地址溢出"))?,
+            )
+            .ok_or_else(|| io::Error::other("玩家属性不可读"))?;
+            let Some(prop) = parse_property(&data) else {
+                continue;
+            };
+            let name = text(prop.name)?;
+            if name == "baseclass" && prop.kind == 6 {
+                if prop.offset != 0 || usize_at(&data, 56) != Some(client_base + 0x235480) {
+                    return Err(io::Error::other("玩家继承代理不是已核对的静态基址代理"));
+                }
+                parent = prop.child;
+            }
+            if prop.kind == 0 && !prop.inside_array {
+                let proxy = usize_at(&data, 48).ok_or_else(|| io::Error::other("属性代理无效"))?;
+                let target = match name.as_str() {
+                    "m_iHealth" => Some(&mut health),
+                    "m_iMaxHealth" => Some(&mut max_health),
+                    "m_lifeState" => Some(&mut life_state),
+                    "m_ArmorValue" | "m_iArmor" => Some(&mut armor),
+                    _ => None,
+                };
+                if let Some(target) = target {
+                    let expected = if name == "m_lifeState" {
+                        0x235900
+                    } else {
+                        0x2358e0
+                    };
+                    if proxy != client_base + expected {
+                        return Err(io::Error::other(format!("{name} 的存储宽度代理未核对")));
+                    }
+                    if target.replace(prop.offset).is_some() {
+                        return Err(io::Error::other(format!("{name} 存在多个标量定义")));
+                    }
+                }
+            }
+        }
+        table = parent;
+    }
+    Ok(PlayerOffsets {
+        health: health.ok_or_else(|| io::Error::other("血量属性缺失"))?,
+        max_health,
+        life_state: life_state.ok_or_else(|| io::Error::other("生命状态属性缺失"))?,
+        armor,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,11 +1,18 @@
-use crate::STOP;
+use crate::{sampling, STOP};
 use gmod_dglab_common::{
     protocol::{Message, VERSION},
     runtime,
 };
-use std::{io, net::TcpStream, sync::atomic::Ordering, time::Duration};
+use std::{
+    io,
+    net::TcpStream,
+    sync::atomic::Ordering,
+    time::{Duration, Instant},
+};
 
 pub fn connect_and_heartbeat() -> io::Result<()> {
+    sampling::EVENTS.clear();
+    let generation = sampling::GENERATION.fetch_add(1, Ordering::AcqRel) + 1;
     let config = runtime::load_config()?;
     let stream = TcpStream::connect_timeout(&config.address, Duration::from_secs(2))?;
     stream.set_read_timeout(Some(Duration::from_secs(2)))?;
@@ -16,7 +23,7 @@ pub fn connect_and_heartbeat() -> io::Result<()> {
         version: VERSION,
         session_id: runtime::random_token()?,
         token: config.token,
-        module_id: "windows-x64-interface-diagnostic-only".into(),
+        module_id: "windows-x64-player-sampling-preview".into(),
     };
     let session = match &hello {
         Message::Hello { session_id, .. } => session_id.clone(),
@@ -41,28 +48,53 @@ pub fn connect_and_heartbeat() -> io::Result<()> {
         return Err(io::Error::other("诊断接收器拒绝连接"));
     }
     let mut seq = 1u64;
+    let mut last_beat = Instant::now()
+        .checked_sub(Duration::from_secs(1))
+        .unwrap_or_else(Instant::now);
+    let mut last_report = Instant::now();
     while !STOP.load(Ordering::Acquire) {
-        let beat = Message::Heartbeat {
-            version: VERSION,
-            session_id: session.clone(),
-            seq,
-        };
-        socket
-            .send(tungstenite::Message::Text(
-                serde_json::to_string(&beat)
-                    .map_err(io::Error::other)?
-                    .into(),
-            ))
-            .map_err(|_| io::Error::other("心跳发送失败"))?;
-        seq = seq
-            .checked_add(1)
-            .ok_or_else(|| io::Error::other("会话序号耗尽"))?;
-        for _ in 0..10 {
-            if STOP.load(Ordering::Acquire) {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
+        if last_beat.elapsed() >= Duration::from_secs(1) {
+            let beat = Message::Heartbeat {
+                version: VERSION,
+                session_id: session.clone(),
+                seq,
+            };
+            socket
+                .send(tungstenite::Message::Text(
+                    serde_json::to_string(&beat)
+                        .map_err(io::Error::other)?
+                        .into(),
+                ))
+                .map_err(|_| io::Error::other("心跳发送失败"))?;
+            seq = seq
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("会话序号耗尽"))?;
+            last_beat = Instant::now();
         }
+        while let Some(event) = sampling::EVENTS.pop_generation(Instant::now(), generation) {
+            let message = Message::Event {
+                version: VERSION,
+                session_id: session.clone(),
+                seq,
+                age_ms: event.at.elapsed().as_millis().min(u64::MAX as u128) as u64,
+                data: event.data,
+            };
+            socket
+                .send(tungstenite::Message::Text(
+                    serde_json::to_string(&message)
+                        .map_err(io::Error::other)?
+                        .into(),
+                ))
+                .map_err(|_| io::Error::other("事件发送失败"))?;
+            seq = seq
+                .checked_add(1)
+                .ok_or_else(|| io::Error::other("会话序号耗尽"))?;
+        }
+        if last_report.elapsed() >= Duration::from_secs(15) {
+            crate::log(&sampling::statistics());
+            last_report = Instant::now();
+        }
+        std::thread::sleep(Duration::from_millis(20));
     }
     let _ = socket.close(None);
     Ok(())

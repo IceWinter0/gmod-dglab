@@ -67,8 +67,19 @@ pub fn decode_message(bytes: &[u8]) -> Result<Message, ProtocolError> {
             ..
         } => {
             let data_valid = match data {
-                GameEvent::HealthDecreased { before, after, .. }
-                | GameEvent::ArmorDecreased { before, after } => {
+                GameEvent::PlayerState {
+                    sample,
+                    max_health,
+                    thread_id,
+                } => {
+                    *thread_id > 0
+                        && max_health.is_none_or(|h| h > 0)
+                        && sample.is_none_or(|s| {
+                            s.entity_key > 0 && s.life_state <= 4 && s.armor.is_none_or(|a| a >= 0)
+                        })
+                }
+                GameEvent::HealthDecreased { before, after, .. } => before > after,
+                GameEvent::ArmorDecreased { before, after } => {
                     before > after && *before >= 0 && *after >= 0
                 }
                 GameEvent::Died | GameEvent::Respawned => true,
@@ -88,6 +99,16 @@ pub fn decode_message(bytes: &[u8]) -> Result<Message, ProtocolError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn accepts_unknown_armor_state_and_negative_lethal_health() {
+        assert!(decode_message(br#"{"type":"event","version":1,"session_id":"s","seq":1,"age_ms":0,"data":{"kind":"player_state","sample":{"entity_key":1,"health":100,"armor":null,"life_state":0},"max_health":100,"thread_id":42}}"#).is_ok());
+        assert!(decode_message(br#"{"type":"event","version":1,"session_id":"s","seq":2,"age_ms":0,"data":{"kind":"health_decreased","before":100,"after":-20,"death_priority":true}}"#).is_ok());
+        assert_eq!(decode_message(br#"{"type":"event","version":1,"session_id":"s","seq":3,"age_ms":0,"data":{"kind":"player_state","sample":{"entity_key":1,"health":100,"armor":null,"life_state":255},"max_health":100,"thread_id":42}}"#),Err(ProtocolError::InvalidField));
+    }
+    #[test]
+    fn respawnable_life_state_remains_a_valid_dead_state() {
+        assert!(decode_message(br#"{"type":"event","version":1,"session_id":"s","seq":1,"age_ms":0,"data":{"kind":"player_state","sample":{"entity_key":1,"health":0,"armor":null,"life_state":3},"max_health":100,"thread_id":42}}"#).is_ok());
+    }
     #[test]
     fn valid_event_decodes() {
         let bytes = br#"{"type":"event","version":1,"session_id":"session-1","seq":1,"age_ms":50,"data":{"kind":"health_decreased","before":100,"after":80,"death_priority":false}}"#;

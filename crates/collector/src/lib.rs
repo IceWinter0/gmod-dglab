@@ -2,6 +2,7 @@
 compile_error!("采集 DLL 仅支持 Windows x64");
 mod native;
 mod netvars;
+mod sampling;
 mod transport;
 use core::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -41,7 +42,7 @@ unsafe extern "system" fn worker(_arg: *mut c_void) -> u32 {
         STATUS.store(3, Ordering::Release);
         return 1;
     }
-    log("开始 Windows x64 接口诊断；不挂钩、不采样、不连接郊狼。");
+    log("开始 Windows x64 玩家采样预览；不连接郊狼。");
     for attempt in 0..60 {
         if STOP.load(Ordering::Acquire) {
             break;
@@ -49,15 +50,31 @@ unsafe extern "system" fn worker(_arg: *mut c_void) -> u32 {
         match native::inspect() {
             Ok(report) => {
                 log(&report);
+                let hook = match sampling::Hook::install() {
+                    Ok(hook) => {
+                        log("已接入网络更新结束回调；读取本地玩家，未知护甲保持不可用。");
+                        Some(hook)
+                    }
+                    Err(error) => {
+                        log(&format!("玩家采样未启用：{error}"));
+                        None
+                    }
+                };
                 while !STOP.load(Ordering::Acquire) {
                     if let Err(error) = transport::connect_and_heartbeat() {
                         log(&format!("本机诊断连接：{error}"));
                     }
+                    log(&sampling::statistics());
                     for _ in 0..20 {
                         if STOP.load(Ordering::Acquire) {
                             break;
                         }
                         std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                }
+                if let Some(hook) = hook {
+                    if let Err(error) = hook.stop() {
+                        log(&format!("恢复原始回调：{error}"));
                     }
                 }
                 break;

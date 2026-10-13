@@ -68,7 +68,32 @@ pub fn receive(stream: TcpStream, token: String) -> io::Result<usize> {
                 .map_err(|_| io::Error::other("认证回复失败"))?;
             }
             Message::Heartbeat { seq, .. } => println!("游戏心跳：{seq}"),
-            Message::Event { data, .. } => println!("游戏事件：{data:?}"),
+            Message::Event { data, .. } => {
+                use gmod_dglab_common::tracker::GameEvent;
+                match data {
+                    GameEvent::PlayerState {
+                        sample: Some(player),
+                        max_health,
+                        thread_id,
+                    } => println!(
+                        "玩家状态：血量 {}，最大血量 {:?}，生命状态 {}，护甲 {:?}，线程 {}",
+                        player.health, max_health, player.life_state, player.armor, thread_id
+                    ),
+                    GameEvent::PlayerState { sample: None, .. } => {
+                        println!("玩家状态：暂无有效本地玩家")
+                    }
+                    GameEvent::HealthDecreased {
+                        before,
+                        after,
+                        death_priority,
+                    } => println!("掉血事件：{before} → {after}，死亡优先 {death_priority}"),
+                    GameEvent::ArmorDecreased { before, after } => {
+                        println!("护甲减少：{before} → {after}")
+                    }
+                    GameEvent::Died => println!("死亡事件"),
+                    GameEvent::Respawned => println!("重生事件"),
+                }
+            }
         }
     }
 }

@@ -5,13 +5,18 @@ use serde::{Deserialize, Serialize};
 pub struct PlayerSample {
     pub entity_key: u64,
     pub health: i32,
-    pub armor: i32,
+    pub armor: Option<i32>,
     pub life_state: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GameEvent {
+    PlayerState {
+        sample: Option<PlayerSample>,
+        max_health: Option<i32>,
+        thread_id: u32,
+    },
     HealthDecreased {
         before: i32,
         after: i32,
@@ -59,11 +64,13 @@ impl Tracker {
                 death_priority: !alive,
             });
         }
-        if after.armor < before.armor {
-            events.push(GameEvent::ArmorDecreased {
-                before: before.armor,
-                after: after.armor,
-            });
+        if let (Some(old), Some(new)) = (before.armor, after.armor) {
+            if new < old {
+                events.push(GameEvent::ArmorDecreased {
+                    before: old,
+                    after: new,
+                });
+            }
         }
         if !alive {
             events.push(GameEvent::Died);
@@ -79,7 +86,7 @@ mod tests {
         Some(PlayerSample {
             entity_key: key,
             health,
-            armor,
+            armor: Some(armor),
             life_state,
         })
     }

@@ -33,6 +33,17 @@ pub fn read<const N: usize>(address: usize) -> Option<[u8; N]> {
     (ok != 0 && count == N).then_some(bytes)
 }
 
+pub fn base(name: &str) -> io::Result<usize> {
+    let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: 已终止的 UTF-16 名称，不加载模块。
+    let handle = unsafe { GetModuleHandleW(wide.as_ptr()) } as usize;
+    if handle == 0 {
+        Err(io::Error::other(format!("{name} 尚未加载")))
+    } else {
+        Ok(handle)
+    }
+}
+
 fn module(
     name: &str,
     expected: ImageIdentity,
@@ -113,7 +124,7 @@ pub fn inspect() -> io::Result<String> {
         Err(error) => format!("属性表诊断未完成：{error}"),
     };
     Ok(format!(
-        "{engine}\n{client}\n{properties}\n当前仅诊断接口与属性元数据，未启用玩家采样或设备输出。"
+        "{engine}\n{client}\n{properties}\n接口与属性诊断结束，采样回调将另行核对；设备输出保持关闭。"
     ))
 }
 
