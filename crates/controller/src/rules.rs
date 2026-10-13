@@ -118,20 +118,20 @@ impl RuleConfig {
         if !(100..=10000).contains(&self.duration_ms)
             || !(100..=10000).contains(&self.death_duration_ms)
         {
-            return Err("受伤与死亡持续时间须为 100..10000 ms".into());
+            return Err("受伤和死亡的持续时间必须在 100～10000 毫秒之间".into());
         }
         if self.injury_cooldown_ms > 60000 || self.death_cooldown_ms > 60000 {
-            return Err("冷却时间须为 0..60000 ms，0 表示关闭".into());
+            return Err("冷却时间必须在 0～60 秒之间，设为 0 可关闭冷却".into());
         }
         if self.death_strength > 200 {
-            return Err("死亡额外强度须为 0..200".into());
+            return Err("死亡额外强度必须在 0～200 之间".into());
         }
         for c in &self.channels {
             if c.base_strength > c.max_strength || c.max_strength > 200 {
-                return Err("基础强度不能超过上限，上限最多 200".into());
+                return Err("基础强度不能超过强度上限，强度上限不能超过 200".into());
             }
             if !c.mapping_rate.is_finite() || !(0.0..=200.0).contains(&c.mapping_rate) {
-                return Err("映射率须为 0..200 的有限数值".into());
+                return Err("映射率必须是 0～200 之间的数值".into());
             }
             if !crate::waveforms::known_builtin_id(&c.waveform)
                 && !crate::waveforms::valid_user_id(&c.waveform)
@@ -250,7 +250,7 @@ impl ControllerCore {
     pub fn set_preview(&mut self, enabled: bool, now_ms: u64) -> Result<(), String> {
         self.tick(now_ms);
         if enabled && !self.player.is_some_and(|p| p.life_state == 0) {
-            return Err("需要有效且存活的本地玩家才能启用预览".into());
+            return Err("请进入游戏，并在玩家存活时启用联动".into());
         }
         self.enabled = enabled;
         if !enabled {
@@ -258,9 +258,9 @@ impl ControllerCore {
         }
         self.refresh();
         self.note(if enabled {
-            "规则预览已启用（基础强度生效，不发送设备输出）"
+            "联动已启用，基础强度已生效（设备未连接）"
         } else {
-            "规则预览已停用"
+            "联动已停用"
         });
         Ok(())
     }
@@ -272,7 +272,7 @@ impl ControllerCore {
         self.enabled = false;
         self.clear_effects();
         self.refresh();
-        self.note("已停止预览，目标归零");
+        self.note("联动已停用，强度已归零");
     }
     pub fn disconnect(&mut self) {
         self.stop();
@@ -324,7 +324,7 @@ impl ControllerCore {
     pub fn tick(&mut self, now_ms: u64) {
         if now_ms < self.now {
             self.stop();
-            self.note("时钟回退，已停用预览");
+            self.note("计时异常，联动已停用");
         }
         self.now = now_ms;
         if self.injury.expire(now_ms, self.config.injury_cooldown_ms) {
@@ -337,7 +337,7 @@ impl ControllerCore {
     }
     fn log_target(&mut self) {
         self.note(format!(
-            "预览目标：A {} / B {}",
+            "当前强度：A {} / B {}",
             self.targets[0], self.targets[1]
         ));
     }

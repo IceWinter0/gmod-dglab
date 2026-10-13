@@ -301,7 +301,7 @@ impl ControllerHub {
     pub fn expect_process(&mut self, pid: u32, allow_legacy: bool) -> Result<(), String> {
         let mut s = self.shared.lock().unwrap();
         if pid == 0 {
-            return Err("目标 PID 无效".into());
+            return Err("游戏进程 ID 无效".into());
         }
         if s.connected {
             return Err("游戏已经连接，不重复注入".into());
@@ -405,7 +405,7 @@ impl ControllerHub {
                         s.core.disconnect();
                         s.connected = false;
                         s.process_id = None;
-                        s.core.note("监听失败，已停用预览");
+                        s.core.note("游戏连接监听失败，联动已停用");
                         break;
                     }
                 }
