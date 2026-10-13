@@ -1,6 +1,6 @@
 # GMod × 郊狼
 
-让 Garry’s Mod 中的受伤、死亡和血量变化与郊狼强度联动。通过中文桌面面板设置 A/B 通道的强度、波形和联动规则，无需安装服务器插件。
+让 Garry’s Mod 中的受伤、死亡和血量变化与郊狼强度联动。通过桌面面板设置 A/B 通道的强度、波形和联动规则，无需安装服务器插件以及要求服务器允许客户端lua。
 
 ## 下载与使用
 
@@ -10,7 +10,7 @@
 - Garry’s Mod 的 **x86-64 / Chromium 分支**。
 - 郊狼 **3.0** 硬件与 DG-Lab APP。APP 3.x 已通过实机测试；APP 4.x 为实验性支持，尚未完成实机验证。
 
-### 快速上手
+### 使用教程
 
 1. 前往 [Releases](https://github.com/IceWinter0/gmod-dglab/releases/latest)，下载 `gmod-dglab-0.1.0-windows-x64.zip` 并完整解压。保留 `bin` 目录，运行 `gmod-dglab.exe`。
 2. 启动 GMod x64，进入游戏地图。点击面板顶部的“连接游戏”，等待显示已连接；连接失败时可点击“重新连接”。
@@ -31,7 +31,7 @@ A/B 通道可以分别设置基础强度、强度上限、映射率和波形。�
 基础强度 + 受伤增量 + 死亡增量
 ```
 
-小数增量先保留并累加，计算总和后四舍五入，例如 `10.4 → 10`、`10.5 → 11`。最终发送的强度不会超过面板与 APP 中的通道上限。
+小数增量先保留并累加，计算总和后四舍五入。最终发送的强度不会超过面板与 APP 中的通道上限。
 
 ### 受伤联动
 
@@ -66,7 +66,7 @@ A/B 通道可以分别设置基础强度、强度上限、映射率和波形。�
 
 导入文件与保存后的波形库最多 1 MiB，最多 128 种波形，每种最多 4096 帧。相同名称和数据自动去重；存在无效数据时整批导入失败。导入不会自动开启输出。目前只支持上述 JSON 格式，不支持直接导入 APP 导出的 ZIP 或二维码。
 
-## 常见问题
+## Q&A
 
 ### 找不到游戏或连接失败
 
@@ -99,7 +99,7 @@ A/B 通道可以分别设置基础强度、强度上限、映射率和波形。�
 ## 兼容性说明
 
 - 当前仅支持 Windows x64、GMod x86-64 / Chromium 分支和郊狼 3.0。
-- APP 3.x 已通过实机测试；APP 4.x 尚未完成实机验证。
+- APP 3.x 已通过实机测试；APP 4.x 尚未完成实机测试。
 - 受伤联动依据本地玩家血量变化计算，无法还原服务器上的每次伤害、攻击者或伤害类型；护甲不参与计算。
 - 百分比映射与缺失生命值模式需要最大生命值；无法获取时跳过对应计算。
 - 不同地图、服务器、换图和断线重连场景的兼容性仍需进一步验证。
@@ -125,4 +125,4 @@ cargo build --release -p gmod-dglab-collector --target-dir target/injector-colle
 
 作者：**IceWinter**。问题反馈和功能建议请提交至 [Issues](https://github.com/IceWinter0/gmod-dglab/issues)。
 
-本项目采用 [GNU GPL v3](LICENSE)。此前以 MIT 发布的原创代码保留其既有授权，见 [LICENSE-MIT](LICENSE-MIT)。官方波形来源及第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+本项目采用 [GNU GPL v3](LICENSE)。官方波形来源及第三方许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
