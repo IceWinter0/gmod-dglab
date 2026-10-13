@@ -165,7 +165,7 @@ impl Inner {
                 return Ok(());
             }
             if !process.alive() {
-                return Err("游戏已退出，请启动后重试连接".into());
+                return Err("游戏已退出，请启动后重新连接".into());
             }
             let state = hub.lock().unwrap().snapshot();
             if state.game_connected

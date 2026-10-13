@@ -348,7 +348,7 @@ fn run(inner: &Inner, settings: &DeviceSettings, generation: u64) -> Result<(), 
             break;
         }
         if last_received.elapsed() > Duration::from_secs(90) {
-            return Err("设备连接超时，请重试连接".into());
+            return Err("设备连接超时，请重新连接".into());
         }
         match ws.read() {
             Ok(Message::Text(text)) => {
@@ -477,7 +477,7 @@ fn run(inner: &Inner, settings: &DeviceSettings, generation: u64) -> Result<(), 
                     e.kind(),
                     std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
                 ) => {}
-            Err(_) => return Err("设备连接已断开，请重试连接".into()),
+            Err(_) => return Err("设备连接已断开，请重新连接".into()),
         }
         if expected
             .iter()

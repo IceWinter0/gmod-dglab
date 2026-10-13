@@ -64,4 +64,4 @@ test('validates injury mode and mapping unit and excludes removed presets',()=>{
 });
 
 import {connectionButton} from './connection.ts';
-test('connection button reflects attempts without enabling rules',()=>{assert.deepEqual(connectionButton(false,'idle'),{label:'连接游戏',disabled:false});assert.deepEqual(connectionButton(false,'failed'),{label:'重试连接',disabled:false});for(const phase of ['injecting','waiting'] as const)assert.deepEqual(connectionButton(false,phase),{label:'连接中…',disabled:true});assert.deepEqual(connectionButton(true,'failed'),{label:'已连接',disabled:true});});
+test('connection button reflects attempts without enabling rules',()=>{assert.deepEqual(connectionButton(false,'idle'),{label:'连接游戏',disabled:false});assert.deepEqual(connectionButton(false,'failed'),{label:'重新连接',disabled:false});for(const phase of ['injecting','waiting'] as const)assert.deepEqual(connectionButton(false,phase),{label:'连接中…',disabled:true});assert.deepEqual(connectionButton(true,'failed'),{label:'已连接',disabled:true});});
