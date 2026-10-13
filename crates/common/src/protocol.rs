@@ -12,6 +12,8 @@ pub enum Message {
         session_id: String,
         token: String,
         module_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        process_id: Option<u32>,
     },
     Heartbeat {
         version: u32,
@@ -46,13 +48,15 @@ pub fn decode_message(bytes: &[u8]) -> Result<Message, ProtocolError> {
             session_id,
             token,
             module_id,
+            process_id,
         } => (
             *version,
             session_id,
             token.len() >= 32
                 && token.len() <= 256
                 && !module_id.is_empty()
-                && module_id.len() <= 256,
+                && module_id.len() <= 256
+                && process_id.is_none_or(|pid| pid > 0),
         ),
         Message::Heartbeat {
             version,
@@ -154,5 +158,18 @@ mod tests {
             decode_message(br#"{"type":"heartbeat","version":1,"session_id":"s","seq":NaN}"#),
             Err(ProtocolError::InvalidJson)
         );
+    }
+
+    #[test]
+    fn hello_pid_is_optional_and_zero_is_rejected() {
+        let base = r#"{"type":"hello","version":1,"session_id":"s","token":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","module_id":"test"}"#;
+        assert!(decode_message(base.as_bytes()).is_ok());
+        let mut value: serde_json::Value = serde_json::from_str(base).unwrap();
+        value["process_id"] = 123.into();
+        let decoded = decode_message(serde_json::to_string(&value).unwrap().as_bytes())
+            .expect("new PID accepted");
+        assert_eq!(serde_json::to_value(decoded).unwrap()["process_id"], 123);
+        value["process_id"] = 0.into();
+        assert!(decode_message(serde_json::to_string(&value).unwrap().as_bytes()).is_err());
     }
 }

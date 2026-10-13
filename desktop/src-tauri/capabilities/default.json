@@ -1,0 +1,1 @@
+{ "identifier": "main", "description": "本地控制面板，不开放文件系统或 shell 插件", "windows": ["main"], "permissions": [] }
