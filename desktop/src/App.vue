@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import {connectionButton} from './connection';
+import {defaultDeviceSettings,deviceStatus,canStartOutput} from './device';
 import ThemeSelect from './ThemeSelect.vue';
 import { DeveloperAccess } from './developer';
 import { api, type Snapshot, type Waveform } from './api';
@@ -12,6 +13,10 @@ const error=ref(''), notice=ref(''), address=ref('127.0.0.1:47831'), busy=ref(fa
 const page=ref<'control'|'waves'|'settings'|'developer'>('control');
 const developer=reactive(new DeveloperAccess());
 const selectedGame=ref('');
+const deviceSettings=ref(defaultDeviceSettings()),selectedDevice=ref('');
+const deviceModes=[{value:'app3',label:'APP 3.x'},{value:'app4',label:'APP 4.x'}];
+const deviceLive=computed(()=>['connecting','waiting_for_app','waiting_for_device','ready'].includes(state.value?.device.phase??'idle'));
+const deviceChoices=computed(()=>state.value?.device.choices.map(device=>({value:device.key,label:device.name}))??[]);
 const gameButton=computed(()=>connectionButton(connected.value,state.value?.connection.phase??'idle'));
 const gameOptions=computed(()=>state.value?.connection.candidates.map(game=>({value:String(game.pid),label:`PID ${game.pid} · ${game.path}`}))??[]);
 const selectedWave=ref('official:breathing'), search=ref('');
@@ -21,7 +26,7 @@ const waveformOptions=computed(()=>waveforms.value.map(w=>({value:w.id,label:`${
 const injuryModes=[{value:'accumulate',label:'连续受伤累加'},{value:'health_deficit',label:'按缺失生命值计算'}] as const;
 const mappingUnits=[{value:'points',label:'每 1 点血量'},{value:'percent',label:'每 1% 最大生命值'}] as const;
 const deathChannelOptions=[{value:'all',label:'所有已开启联动的通道'},{value:'a',label:'仅 A 通道（需开启联动）'},{value:'b',label:'仅 B 通道（需开启联动）'}] as const;
-const pageTitle=computed(()=>({control:'联动控制',waves:'波形管理',settings:'设置',developer:'开发者工具'})[page.value]);
+const pageTitle=computed(()=>({control:'强度控制',waves:'波形管理',settings:'设置',developer:'开发者工具'})[page.value]);
 function unlockDeveloper() {
   if(developer.enabled){notice.value='开发者模式已开启';return;}
   developer.click(performance.now());
@@ -37,12 +42,12 @@ const player=computed(()=>state.value?.controller.player);
 const active=computed(()=>state.value?.controller.preview_enabled ?? false);
 const logs=computed(()=>[...(state.value?.controller.logs ?? [])].reverse());
 const healthPercent=computed(()=>player.value && state.value?.controller.max_health ? Math.max(0,Math.min(100,100*player.value.health/state.value.controller.max_health)) : 0);
-const canEnable=computed(()=>connected.value && player.value?.life_state===0 && !dirty.value && !validation.value);
+const canEnable=computed(()=>!validation.value && canStartOutput(state.value?.device,connected.value,player.value?.life_state===0,dirty.value,draft.value.channels));
 async function refresh() {
   if(polling) return; polling=true;
   try {
     state.value=await api.state();
-    if(!loaded.value) { draft.value=copyConfig(state.value.controller.config); address.value=state.value.listen_address; loaded.value=true; }
+    if(!loaded.value) { draft.value=copyConfig(state.value.controller.config); address.value=state.value.listen_address; deviceSettings.value={...state.value.device_settings}; loaded.value=true; }
   } catch { error.value='无法连接桌面控制核心，请通过 Windows 桌面程序打开此面板。'; }
   finally { polling=false; }
 }
@@ -53,6 +58,10 @@ async function action(fn:()=>Promise<void>, message:string) {
   finally { busy.value=false; }
 }
 async function connectGame(selected=false){await action(()=>api.connectGame(selected?Number(selectedGame.value):undefined),'');}
+function deviceConfigCopy(){return {...deviceSettings.value};}
+async function connectDevice(){await action(()=>api.connectDevice(deviceConfigCopy()),'');}
+async function applyDeviceSettings(){await action(()=>api.deviceSettings(deviceConfigCopy()),'设备连接设置已保存');}
+async function chooseDevice(){await action(()=>api.selectDevice(selectedDevice.value),'');}
 async function save() { if(validation.value) {error.value=validation.value;return;} await action(()=>api.configure(copyConfig(draft.value)),'规则已保存'); }
 async function togglePreview() { await action(()=>api.preview(!active.value),active.value?'联动已停用':'联动已启用'); }
 async function applyAddress() { await action(()=>api.listen(address.value),'监听地址已更新，请等待 DLL 重连'); }
@@ -74,19 +83,19 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
 <template>
   <div class="app-frame">
     <aside class="navigation">
-      <div class="brand"><img class="brand-mark" :src="brandLogo" :srcset="`${brandLogo} 1x, ${brandLogo2x} 2x`" alt="GMod 郊狼联动标志"><div><h1>GMod × 郊狼</h1><p>游戏联动控制面板</p></div></div>
+      <div class="brand"><img class="brand-mark" :src="brandLogo" :srcset="`${brandLogo} 1x, ${brandLogo2x} 2x`" alt="GMod 郊狼联动标志"><div><h1>GMod × 郊狼</h1><p>控制面板</p></div></div>
       <nav aria-label="主导航">
-        <button :class="{selected:page==='control'}" :aria-current="page==='control'?'page':undefined" @click="page='control'">联动控制</button>
+        <button :class="{selected:page==='control'}" :aria-current="page==='control'?'page':undefined" @click="page='control'">强度控制</button>
         <button :class="{selected:page==='waves'}" :aria-current="page==='waves'?'page':undefined" @click="page='waves'">波形管理</button>
         <button :class="{selected:page==='settings'}" :aria-current="page==='settings'?'page':undefined" @click="page='settings'">设置</button>
         <button v-if="developer.enabled" :class="{selected:page==='developer'}" :aria-current="page==='developer'?'page':undefined" @click="page='developer'">开发者工具</button>
       </nav>
-      <div class="navigation-note"><span class="pill">测试版</span><p>强度根据联动规则计算<br>设备连接功能开发中</p><small v-if="developer.enabled">开发者模式已开启</small></div>
+      <div class="navigation-note"><span class="pill">测试版</span><p>通过郊狼 APP 连接设备</p><small v-if="developer.enabled">开发者模式已开启</small></div>
     </aside>
     <main class="main-panel">
       <header class="topbar">
-        <div class="global-status"><span class="game-status"><i class="dot" :class="{on:connected}"></i>游戏 {{ connected?'已连接':'未连接' }}<button class="game-connect" :disabled="gameButton.disabled || busy" @click="connectGame()">{{ gameButton.label }}</button></span><span>设备尚未接入</span><span :class="{running:active}">{{ active?'联动已启用':'联动未启用' }}</span></div>
-        <button class="stop" @click="action(api.stop,'强度已重置为零，联动已停用')">重置强度</button>
+        <div class="global-status"><span class="game-status"><i class="dot" :class="{on:connected}"></i>游戏 {{ connected?'已连接':'未连接' }}<button class="game-connect" :disabled="gameButton.disabled || busy" @click="connectGame()">{{ gameButton.label }}</button></span><span>设备 {{ deviceStatus(state?.device) }}</span><span :class="{running:active}">{{ active?'联动已启用':'联动未启用' }}</span></div>
+        <button class="stop" @click="action(api.stop,'输出已停用，已请求重置强度')">重置强度</button>
       </header>
       <div class="page-content">
         <div class="page-heading"><div><h2>{{ pageTitle }}</h2><p>{{ page==='control'?'查看游戏状态，配置双通道联动规则':page==='waves'?'查看波形，导入自定义波形':page==='settings'?'本机连接与应用信息':'连接诊断与完整事件记录' }}</p></div><span v-if="dirty" class="unsaved">规则尚未保存</span></div>
@@ -96,18 +105,26 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
         <div v-else-if="!connected && (state?.connection.phase==='injecting' || state?.connection.phase==='waiting')" class="banner notice" role="status">{{ state.connection.message }}</div>
         <section v-if="state?.connection.phase==='selecting'" class="card game-selection"><h3>选择游戏进程</h3><p class="hint">{{ state.connection.message }}</p><ThemeSelect v-model="selectedGame" :options="gameOptions" label="游戏进程"/><div class="selection-actions"><button class="secondary" :disabled="busy" @click="action(api.cancelGameSelection,'已取消进程选择');selectedGame=''">取消</button><button class="primary" :disabled="busy || !gameOptions.some(option=>option.value===selectedGame)" @click="connectGame(true)">确认连接</button></div></section>
         <template v-if="page==='control'">
+          <section class="card device-card">
+            <div class="card-title"><h3>设备连接</h3><span class="pill">{{ deviceStatus(state?.device) }}</span></div>
+            <div class="device-controls"><ThemeSelect v-model="deviceSettings.mode" :options="deviceModes" :disabled="deviceLive || busy" label="郊狼 APP 版本"/><button v-if="!deviceLive" class="primary" :disabled="busy || !loaded" @click="connectDevice">{{ state?.device.phase==='failed' || state?.device.phase==='disconnected'?'重试连接':'连接设备' }}</button><button v-else class="secondary" :disabled="busy" @click="action(api.disconnectDevice,'已请求断开设备')">断开设备</button></div>
+            <div class="device-pairing" v-if="state?.device.qr_data_url"><img :src="state.device.qr_data_url" alt="郊狼 APP 配对二维码"><div><strong>使用郊狼 APP 扫码连接</strong><p class="hint">在 APP 中连接郊狼 3.0，打开 SOCKET 控制并扫描此二维码。</p></div></div>
+            <p class="hint" :class="{validation:state?.device.phase==='failed'}">{{ state?.device.message }}</p>
+            <p class="hint" v-if="state?.device.stop_status==='requested'">正在等待 APP 确认强度归零</p><p class="hint" v-else-if="state?.device.stop_status==='confirmed'">APP 已回传双通道强度为零</p><p class="validation" v-else-if="state?.device.stop_status==='unconfirmed'">未收到强度归零确认，请在 APP 中检查设备状态</p>
+            <div class="device-controls" v-if="deviceChoices.length"><ThemeSelect v-model="selectedDevice" :options="deviceChoices" label="郊狼 3.0 设备"/><button class="secondary" :disabled="busy || !selectedDevice" @click="chooseDevice">选择设备</button></div>
+          </section>
           <section class="card player-card">
             <div class="card-title"><h3>玩家状态</h3><span class="pill">{{ player ? (player.life_state===0?'存活':'死亡 / 过渡状态') : '暂无有效玩家' }}</span></div>
-            <div class="health-line"><div><span class="eyebrow">实时血量</span><div class="health-value">{{ player?.health ?? '—' }} <small>/ {{ state?.controller.max_health ?? '—' }}</small></div></div><div class="armor"><span class="eyebrow">护甲</span><strong>{{ player?.armor ?? '不可用' }}</strong></div></div>
+            <div class="health-line"><div><span class="eyebrow">血量</span><div class="health-value">{{ player?.health ?? '—' }} <small>/ {{ state?.controller.max_health ?? '—' }}</small></div></div><div class="armor"><span class="eyebrow">护甲</span><strong>{{ player?.armor ?? '不可用' }}</strong></div></div>
             <div class="health-track"><div :style="{width:`${healthPercent}%`}"></div></div>
             <p class="hint">{{ player && !state?.controller.max_health ? '最大生命值不可用：缺失生命值模式和百分比映射暂不计算。' : '按客户端血量变化计算，可能合并多次伤害。' }}</p>
           </section>
           <section class="card mapping">
-            <div class="card-title"><h3>通道强度</h3><span class="hint">设备未连接，强度尚未发送</span></div>
+            <div class="card-title"><h3>通道强度</h3><span class="hint">当前强度由 APP 回传</span></div>
             <div class="channel-grid">
               <div v-for="(channel,i) in draft.channels" :key="i" class="channel">
-                <div class="channel-heading"><h4><span class="channel-letter">{{ i===0?'A':'B' }}</span>通道</h4><label class="switch-label"><input type="checkbox" v-model="channel.enabled">参与联动</label></div>
-                <div class="target"><span>当前强度</span><strong>{{ state?.controller.targets[i] ?? 0 }}</strong></div>
+                <div class="channel-heading"><h4><span class="channel-letter">{{ i===0?'A':'B' }}</span>通道</h4><label class="switch-label"><input type="checkbox" v-model="channel.enabled">开启输出</label></div>
+                <div class="target"><span>当前强度</span><strong>{{ state?.device.strengths[i] ?? '—' }}</strong></div><p class="hint">联动强度 {{ state?.controller.targets[i] ?? 0 }} · APP 上限 {{ state?.device.limits[i] ?? '—' }}</p>
                 <div class="field-pair"><label>基础强度<input type="number" min="0" max="200" step="1" v-model.number="channel.base_strength"></label><label>强度上限<input type="number" min="0" max="200" step="1" v-model.number="channel.max_strength"></label></div>
                 <div class="field mapping-field"><label :for="`mapping-rate-${i}`">映射率</label><div class="mapping-controls"><input :id="`mapping-rate-${i}`" :aria-label="`${i===0?'A':'B'} 通道映射率`" type="number" min="0" max="200" step="0.1" v-model.number="channel.mapping_rate"><ThemeSelect v-model="channel.mapping_unit" :options="mappingUnits" :label="`${i===0?'A':'B'} 通道映射单位`"/></div></div>
                 <label class="field">当前波形<ThemeSelect v-model="channel.waveform" :options="waveformOptions" :label="`${i===0?'A':'B'} 通道当前波形`"/></label>
@@ -123,7 +140,7 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
             <div class="setting-row"><div><strong>受伤冷却</strong><p>{{ draft.injury_mode==='health_deficit'?'此模式无需设置冷却时间':'受伤增量结束后开始，0 秒关闭；不影响死亡联动' }}</p></div><label class="row-input">冷却时间<input type="number" min="0" max="60" step="0.1" :value="draft.injury_cooldown_ms/1000" @input="setCooldown('injury_cooldown_ms',$event)" :disabled="draft.injury_mode==='health_deficit'"><span>秒</span></label></div>
             <div class="setting-row"><div><label class="switch-label"><input type="checkbox" v-model="draft.death_enabled"><strong>死亡联动</strong></label><p>死亡时额外增加强度，不超过通道强度上限</p></div><label class="row-input">额外强度<input type="number" min="0" max="200" v-model.number="draft.death_strength" :disabled="!draft.death_enabled"></label></div>
             <details class="advanced"><summary>死亡联动高级设置</summary><div class="setting-row"><label>作用通道</label><ThemeSelect v-model="draft.death_channels" :disabled="!draft.death_enabled" :options="deathChannelOptions" label="死亡联动通道"/></div><div class="setting-row"><label class="row-input">持续时间<input type="number" min="100" max="10000" step="100" v-model.number="draft.death_duration_ms" :disabled="!draft.death_enabled"><span>ms</span></label><label class="row-input">冷却时间<input type="number" min="0" max="60" step="0.1" :value="draft.death_cooldown_ms/1000" @input="setCooldown('death_cooldown_ms',$event)" :disabled="!draft.death_enabled"><span>秒</span></label></div></details>
-            <p class="hint">启用联动后保持基础强度；受伤和死亡分别计时、冷却；重置或连接断开时强度归零</p>
+            <p class="hint">启用输出后保持基础强度；受伤和死亡分别计时、冷却；重置或连接断开时强度归零</p>
           </section>
           <section class="card recent-events"><div class="card-title"><h3>最近事件</h3><button v-if="developer.enabled" class="text-button" @click="page='developer'">完整日志 ↗</button></div><p v-if="!logs.length" class="hint">等待游戏事件</p><div v-for="entry in logs.slice(0,3)" :key="entry.id" class="compact-log"><time>{{ time(entry.at_ms) }}</time><span>{{ entry.text }}</span></div></section>
         </template>
@@ -134,8 +151,9 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
           </div>
         </template>
         <template v-else-if="page==='settings'">
-          <section class="card"><div class="card-title"><h3>本机连接</h3></div><div class="setting-row"><div><strong>监听地址</strong><p>仅支持本机回环地址；旧诊断接收器需先关闭</p></div><div class="address-editor"><input v-model="address" aria-label="监听地址" placeholder="127.0.0.1:47831"><button class="secondary" :disabled="busy || !loaded" @click="applyAddress">应用</button></div></div><p class="hint">当前监听：{{ state?.listen_address ?? '—' }}</p></section>
-          <section class="card"><div class="card-title"><h3>关于应用</h3></div><div class="setting-row"><div><strong>GMod × 郊狼</strong><p>Windows x64 · 测试版</p></div><button class="version-button" @click="unlockDeveloper">v0.1.0</button></div><div class="setting-row"><div><strong>开源许可</strong><p>GPL-3.0</p></div><span class="hint">官方波形数据随附许可说明</span></div><p class="hint">尚未支持郊狼 APP 和硬件连接，当前显示的是按联动规则计算的强度。</p></section>
+          <section class="card"><div class="card-title"><h3>本机连接</h3></div><div class="setting-row"><div><strong>监听地址</strong><p>仅支持本机回环地址</p></div><div class="address-editor"><input v-model="address" aria-label="监听地址" placeholder="127.0.0.1:47831"><button class="secondary" :disabled="busy || !loaded" @click="applyAddress">应用</button></div></div><p class="hint">当前监听：{{ state?.listen_address ?? '—' }}</p></section>
+          <section class="card"><details class="device-advanced"><summary>设备连接高级设置</summary><label class="field">APP 3.x 中继地址<input v-model="deviceSettings.v3_url" :disabled="deviceLive" placeholder="wss://ws.dungeon-lab.cn/"></label><label class="field">APP 4.x 中继地址<input v-model="deviceSettings.v4_url" :disabled="deviceLive" placeholder="wss://trex.dungeon-lab.cn/v4"></label><p class="hint">当前连接：{{ state?.device.service_url || '—' }}</p><button class="secondary" :disabled="busy || deviceLive" @click="applyDeviceSettings">保存连接设置</button></details></section>
+          <section class="card"><div class="card-title"><h3>关于应用</h3></div><div class="setting-row"><div><strong>GMod × 郊狼</strong><p>Windows x64 · 测试版</p></div><button class="version-button" @click="unlockDeveloper">v0.1.0</button></div><div class="setting-row"><div><strong>开源许可</strong><p>GPL-3.0</p></div><span class="hint">官方波形数据随附许可说明</span></div><p class="hint">通过 APP 的 SOCKET 控制连接郊狼 3.0；连接成功后需手动启用输出。</p></section>
           <section v-if="developer.enabled" class="card"><div class="setting-row"><div><strong>开发者模式</strong><p>仅本次运行有效，重启后恢复隐藏</p></div><button class="secondary" @click="exitDeveloper">退出开发者模式</button></div></section>
         </template>
         <template v-else-if="page==='developer' && developer.enabled">
@@ -143,7 +161,7 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
           <section class="card event-log"><div class="card-title"><h3>完整事件日志</h3><span class="pill">{{ logs.length }} / 200</span></div><div class="log-content"><p v-if="!logs.length" class="hint">暂无事件</p><div v-for="entry in logs" :key="entry.id" class="log-entry"><time>{{ time(entry.at_ms) }}</time><p>{{ entry.text }}</p></div></div></section>
         </template>
       </div>
-      <div v-if="page==='control'" class="actionbar"><div><p v-if="validation" class="validation" role="alert">{{ validation }}</p><strong v-else>{{ dirty?'规则尚未保存':active?'联动已启用':'联动已停用' }}</strong><small>受伤冷却 {{ ((state?.controller.injury_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒 · 死亡冷却 {{ ((state?.controller.death_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒</small></div><div class="action-buttons"><button class="secondary" :disabled="busy || !loaded || !!validation" @click="save">保存规则</button><button class="primary" :disabled="busy || (!active && !canEnable)" @click="togglePreview">{{ active?'停用联动':'启用联动' }}</button></div></div>
+      <div v-if="page==='control'" class="actionbar"><div><p v-if="validation" class="validation" role="alert">{{ validation }}</p><strong v-else>{{ dirty?'规则尚未保存':active?'联动已启用':'联动已停用' }}</strong><small>受伤冷却 {{ ((state?.controller.injury_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒 · 死亡冷却 {{ ((state?.controller.death_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒</small></div><div class="action-buttons"><button class="secondary" :disabled="busy || !loaded || !!validation" @click="save">保存规则</button><button class="primary" :disabled="busy || (!active && !canEnable)" @click="togglePreview">{{ active?'停用输出':'启用输出' }}</button></div></div>
     </main>
   </div>
 </template>

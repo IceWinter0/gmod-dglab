@@ -250,7 +250,7 @@ impl ControllerCore {
     pub fn set_preview(&mut self, enabled: bool, now_ms: u64) -> Result<(), String> {
         self.tick(now_ms);
         if enabled && !self.player.is_some_and(|p| p.life_state == 0) {
-            return Err("请进入游戏，并在玩家存活时启用联动".into());
+            return Err("请进入游戏，并在玩家存活时启用输出".into());
         }
         self.enabled = enabled;
         if !enabled {
@@ -258,7 +258,7 @@ impl ControllerCore {
         }
         self.refresh();
         self.note(if enabled {
-            "联动已启用，基础强度已生效（设备未连接）"
+            "联动已启用，基础强度已生效"
         } else {
             "联动已停用"
         });
@@ -272,7 +272,7 @@ impl ControllerCore {
         self.enabled = false;
         self.clear_effects();
         self.refresh();
-        self.note("联动已停用，强度已归零");
+        self.note("输出已停用，联动强度已归零");
     }
     pub fn disconnect(&mut self) {
         self.stop();
@@ -337,7 +337,7 @@ impl ControllerCore {
     }
     fn log_target(&mut self) {
         self.note(format!(
-            "当前强度：A {} / B {}",
+            "联动强度：A {} / B {}",
             self.targets[0], self.targets[1]
         ));
     }

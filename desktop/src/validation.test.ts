@@ -4,6 +4,18 @@ import { validateConfig, copyConfig } from './validation.ts';
 import { reactive } from 'vue';
 import { DeveloperAccess } from './developer.ts';
 import { readFileSync } from 'node:fs';
+import {canStartOutput,deviceStatus,type DeviceSnapshot} from './device.ts';
+test('device pairing and missing limits cannot enable output',()=>{
+  const channels=[{enabled:true},{enabled:false}];
+  const device={phase:'waiting_for_app',limits:[null,null]} as DeviceSnapshot;
+  assert.equal(canStartOutput(device,true,true,false,channels),false);
+  device.phase='ready';assert.equal(canStartOutput(device,true,true,false,channels),false);
+  device.limits=[35,null];assert.equal(canStartOutput(device,true,true,false,channels),true);
+  assert.equal(canStartOutput(device,false,true,false,channels),false);
+  assert.equal(canStartOutput(device,true,true,true,channels),false);
+  device.phase='disconnected';assert.equal(canStartOutput(device,true,true,false,channels),false);
+  assert.equal(deviceStatus(device),'连接断开');
+});
 test('developer tools require seven consecutive clicks and reset on exit', () => {
   const access=new DeveloperAccess();
   for(let i=0;i<6;i++) {access.click(i*100);assert.equal(access.enabled,false);}

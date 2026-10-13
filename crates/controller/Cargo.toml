@@ -10,6 +10,9 @@ gmod-dglab-common = { path = "../common" }
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
+tungstenite = { version = "0.28", features = ["native-tls"] }
+url = "2"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [dev-dependencies]
 tungstenite.workspace = true

@@ -90,7 +90,7 @@ fn save_settings_at(dir: &std::path::Path, settings: &PanelSettings) -> Result<(
         &serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?,
     )
 }
-fn atomic_write(dir: &std::path::Path, name: &str, data: &[u8]) -> Result<(), String> {
+pub(crate) fn atomic_write(dir: &std::path::Path, name: &str, data: &[u8]) -> Result<(), String> {
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let path = dir.join(name);
     let temp = dir.join(format!("{name}-{}.tmp", std::process::id()));
@@ -461,7 +461,7 @@ impl ControllerHub {
         s.core.disconnect();
     }
     #[cfg(test)]
-    fn start_for_test(address: SocketAddr) -> Result<Self, String> {
+    pub(crate) fn start_for_test(address: SocketAddr) -> Result<Self, String> {
         let mut hub = Self::dormant(
             PanelSettings {
                 address,
@@ -474,7 +474,7 @@ impl ControllerHub {
         Ok(hub)
     }
     #[cfg(test)]
-    fn token_for_test(&self) -> &str {
+    pub(crate) fn token_for_test(&self) -> &str {
         &self.token
     }
 }
