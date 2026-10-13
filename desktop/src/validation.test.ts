@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { validateConfig, copyConfig } from './validation.ts';
 import { reactive } from 'vue';
 import { DeveloperAccess } from './developer.ts';
+import { readFileSync } from 'node:fs';
 test('developer tools require seven consecutive clicks and reset on exit', () => {
   const access=new DeveloperAccess();
   for(let i=0;i<6;i++) {access.click(i*100);assert.equal(access.enabled,false);}
@@ -19,6 +20,16 @@ test('a pause breaks the developer unlock sequence', () => {
 const config = () => ({ channels: [{enabled:true,base_strength:0,max_strength:100,waveform:'official:breathing',mapping_rate:1,mapping_unit:'points' as const}, {enabled:false,base_strength:0,max_strength:0,waveform:'official:tide',mapping_rate:1,mapping_unit:'points' as const}], injury_mode:'accumulate' as const,duration_ms:300, death_enabled:false, death_strength:0,injury_cooldown_ms:1000,death_duration_ms:300,death_cooldown_ms:1000,death_channels:'all' as const });
 test('accepts valid preview config', () => assert.equal(validateConfig(config()), null));
 test('supports official and imported waveform selection', () => { const c=config();c.channels[0]!.waveform='official:breathing';c.channels[1]!.waveform='user:'+ 'a'.repeat(64);assert.equal(validateConfig(c),null);c.channels[1]!.waveform='user:unknown';assert.ok(validateConfig(c)); });
+test('all bundled official waveforms can be selected in both channels', () => {
+  const waves = JSON.parse(readFileSync(new URL('../../crates/controller/data/official-coyote.json', import.meta.url), 'utf8')) as {id:string;name:string}[];
+  assert.ok(waves.length > 0);
+  for (const wave of waves) {
+    for (const channel of [0,1]) {
+      const c=config();c.channels[channel]!.waveform=wave.id;
+      assert.equal(validateConfig(c),null,`${wave.name} (${wave.id}) in channel ${channel}`);
+    }
+  }
+});
 test('copies actual Vue reactive config for IPC', () => { const original=reactive(config()); const copy=copyConfig(original); assert.deepEqual(copy,config()); assert.doesNotThrow(()=>structuredClone(copy)); copy.channels[0]!.max_strength=10; assert.equal(original.channels[0]!.max_strength,100); });
 test('rejects inverted range, fractions, nonfinite and duration', () => {
   for (const max of [-1, 201, 0.5, NaN, Infinity]) { const c = config(); c.channels[0]!.max_strength=max; assert.ok(validateConfig(c)); }

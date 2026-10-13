@@ -14,7 +14,7 @@ export function validateConfig(config: RuleConfig): string | null {
     if (!['points','percent'].includes(c.mapping_unit)) return '请选择映射率的单位';
     if (!Number.isFinite(c.mapping_rate) || c.mapping_rate<0 || c.mapping_rate>200) return '映射率必须是 0～200 之间的数值';
     if (!integer(c.base_strength,0,200) || !integer(c.max_strength,0,200) || c.base_strength > c.max_strength) return '强度必须是 0～200 的整数，基础强度不能超过强度上限';
-    if (!/^official:[a-z_]+$/.test(c.waveform) && !/^user:[a-f0-9]{64}$/.test(c.waveform)) return '请选择波形';
+    if (!/^official:[a-z0-9_]+$/.test(c.waveform) && !/^user:[a-f0-9]{64}$/.test(c.waveform)) return '请选择波形';
   }
   return null;
 }
