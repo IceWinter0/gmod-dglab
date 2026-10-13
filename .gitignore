@@ -1,0 +1,15 @@
+/target/
+*.pdb
+*.log
+/desktop/node_modules/
+/desktop/dist/
+/desktop/src-tauri/target/
+/desktop/src-tauri/gen/
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.env*
+!.env.example

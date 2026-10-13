@@ -1,0 +1,11 @@
+[package]
+name = "gmod-dglab-diagnostic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+gmod-dglab-common = { path = "../common" }
+serde_json.workspace = true
+tungstenite.workspace = true
