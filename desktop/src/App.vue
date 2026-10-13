@@ -69,7 +69,7 @@ async function openProject(){await action(api.openProjectPage, '');}
 async function applyDeviceSettings(){await action(()=>api.deviceSettings(deviceConfigCopy()),'设备连接设置已保存');}
 async function chooseDevice(){await action(()=>api.selectDevice(selectedDevice.value),'');}
 async function save() { if(validation.value) {error.value=validation.value;return;} await action(()=>api.configure(copyConfig(draft.value)),'规则已保存'); }
-async function togglePreview() { await action(()=>api.preview(!active.value),active.value?'联动已停用':'联动已启用'); }
+async function togglePreview() { await action(()=>api.preview(!active.value),active.value?'输出已关闭':'输出已开启'); }
 async function applyAddress() { await action(()=>api.listen(address.value),'监听地址已更新，请等待 DLL 重连'); }
 async function importFile(event:Event) {
   const input=event.target as HTMLInputElement; const file=input.files?.[0]; if(!file)return;
@@ -130,7 +130,7 @@ onUnmounted(()=>{if(timer)clearInterval(timer);if(noticeTimer)clearTimeout(notic
             <div class="channel-grid">
               <div v-for="(channel,i) in draft.channels" :key="i" class="channel">
                 <div class="channel-heading"><h4><span class="channel-letter">{{ i===0?'A':'B' }}</span>通道</h4><label class="switch-label"><input type="checkbox" v-model="channel.enabled">开启输出</label></div>
-                <div class="target"><span>当前强度</span><strong>{{ state?.device.strengths[i] ?? '—' }}</strong></div><p class="hint">联动强度 {{ state?.controller.targets[i] ?? 0 }} · APP 上限 {{ state?.device.limits[i] ?? '—' }}</p>
+                <div class="target"><span>当前强度</span><strong>{{ state?.device.strengths[i] ?? '—' }}</strong></div><p class="hint">预期强度 {{ state?.controller.targets[i] ?? 0 }} · APP 上限 {{ state?.device.limits[i] ?? '—' }}</p>
                 <div class="field-pair"><label>基础强度<input type="number" min="0" max="200" step="1" v-model.number="channel.base_strength"></label><label>强度上限<input type="number" min="0" max="200" step="1" v-model.number="channel.max_strength"></label></div>
                 <div class="field mapping-field"><label :for="`mapping-rate-${i}`">映射率</label><div class="mapping-controls"><input :id="`mapping-rate-${i}`" :aria-label="`${i===0?'A':'B'} 通道映射率`" type="number" min="0" max="200" step="0.1" v-model.number="channel.mapping_rate"><ThemeSelect v-model="channel.mapping_unit" :options="mappingUnits" :label="`${i===0?'A':'B'} 通道映射单位`"/></div></div>
                 <label class="field">当前波形<ThemeSelect v-model="channel.waveform" :options="waveformOptions" :label="`${i===0?'A':'B'} 通道当前波形`"/></label>
@@ -167,7 +167,7 @@ onUnmounted(()=>{if(timer)clearInterval(timer);if(noticeTimer)clearTimeout(notic
           <section class="card event-log"><div class="card-title"><h3>完整事件日志</h3><span class="pill">{{ logs.length }} / 200</span></div><div class="log-content"><p v-if="!logs.length" class="hint">暂无事件</p><div v-for="entry in logs" :key="entry.id" class="log-entry"><time>{{ time(entry.at_ms) }}</time><p>{{ entry.text }}</p></div></div></section>
         </template>
       </div>
-      <div v-if="page==='control'" class="actionbar"><div><p v-if="validation" class="validation" role="alert">{{ validation }}</p><strong v-else>{{ dirty?'规则尚未保存':active?'联动已启用':'联动已停用' }}</strong><small>受伤冷却 {{ ((state?.controller.injury_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒 · 死亡冷却 {{ ((state?.controller.death_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒</small></div><div class="action-buttons"><button class="secondary" :disabled="busy || !loaded || !!validation" @click="save">保存规则</button><button class="primary" :disabled="busy || (!active && !canEnable)" @click="togglePreview">{{ active?'停用输出':'启用输出' }}</button></div></div>
+      <div v-if="page==='control'" class="actionbar"><div><p v-if="validation" class="validation" role="alert">{{ validation }}</p><strong v-else>{{ dirty?'规则尚未保存':active?'输出已开启':'输出已关闭' }}</strong><small>受伤冷却 {{ ((state?.controller.injury_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒 · 死亡冷却 {{ ((state?.controller.death_cooldown_remaining_ms ?? 0)/1000).toFixed(1) }} 秒</small></div><div class="action-buttons"><button class="secondary" :disabled="busy || !loaded || !!validation" @click="save">保存规则</button><button class="primary" :disabled="busy || (!active && !canEnable)" @click="togglePreview">{{ active?'停用输出':'启用输出' }}</button></div></div>
     </main>
   </div>
 </template>

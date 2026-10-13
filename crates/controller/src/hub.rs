@@ -405,7 +405,7 @@ impl ControllerHub {
                         s.core.disconnect();
                         s.connected = false;
                         s.process_id = None;
-                        s.core.note("游戏连接监听失败，联动已停用");
+                        s.core.note("游戏连接监听失败，输出已关闭");
                         break;
                     }
                 }

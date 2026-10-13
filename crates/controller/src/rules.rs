@@ -258,9 +258,9 @@ impl ControllerCore {
         }
         self.refresh();
         self.note(if enabled {
-            "联动已启用，基础强度已生效"
+            "输出已开启，基础强度已生效"
         } else {
-            "联动已停用"
+            "输出已关闭"
         });
         Ok(())
     }
@@ -272,7 +272,7 @@ impl ControllerCore {
         self.enabled = false;
         self.clear_effects();
         self.refresh();
-        self.note("输出已停用，联动强度已归零");
+        self.note("输出已停用，预期强度已归零");
     }
     pub fn disconnect(&mut self) {
         self.stop();
@@ -324,7 +324,7 @@ impl ControllerCore {
     pub fn tick(&mut self, now_ms: u64) {
         if now_ms < self.now {
             self.stop();
-            self.note("计时异常，联动已停用");
+            self.note("计时异常，输出已关闭");
         }
         self.now = now_ms;
         if self.injury.expire(now_ms, self.config.injury_cooldown_ms) {
@@ -337,7 +337,7 @@ impl ControllerCore {
     }
     fn log_target(&mut self) {
         self.note(format!(
-            "联动强度：A {} / B {}",
+            "预期强度：A {} / B {}",
             self.targets[0], self.targets[1]
         ));
     }
