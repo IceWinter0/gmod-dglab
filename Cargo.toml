@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/common"]
+members = ["crates/common", "crates/collector", "crates/diagnostic"]
 resolver = "2"
 
 [workspace.package]
@@ -11,8 +11,8 @@ repository = "https://github.com/IceWinter0/gmod-dglab"
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tungstenite = "0.28"
 
 [profile.release]
 panic = "abort"
 strip = "debuginfo"
-
