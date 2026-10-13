@@ -24,6 +24,7 @@ pub fn connect_and_heartbeat() -> io::Result<()> {
         session_id: runtime::random_token()?,
         token: config.token,
         module_id: "windows-x64-player-sampling-preview".into(),
+        process_id: Some(std::process::id()),
     };
     let session = match &hello {
         Message::Hello { session_id, .. } => session_id.clone(),

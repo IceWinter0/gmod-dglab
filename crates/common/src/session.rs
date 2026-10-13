@@ -97,6 +97,7 @@ mod tests {
             session_id: "s".into(),
             token: token.into(),
             module_id: "diagnostic".into(),
+            process_id: None,
         }
     }
     fn beat(seq: u64) -> Message {
