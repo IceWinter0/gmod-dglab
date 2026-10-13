@@ -10,6 +10,29 @@ use std::sync::{Arc, Mutex};
 use tauri::{Manager, State};
 type Hub = Arc<Mutex<ControllerHub>>;
 struct DeviceConfig(Mutex<DeviceSettings>);
+#[tauri::command]
+fn open_project_page() -> Result<(), String> {
+    let url: Vec<u16> = "https://github.com/IceWinter0/gmod-dglab"
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+    // SAFETY: 固定 HTTPS 地址和有效 NUL 结尾缓冲；不接受前端传入的程序或路径。
+    let result = unsafe {
+        windows_sys::Win32::UI::Shell::ShellExecuteW(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            url.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            1,
+        )
+    } as isize;
+    if result <= 32 {
+        Err("无法打开浏览器，请复制 GitHub 地址后访问".into())
+    } else {
+        Ok(())
+    }
+}
 #[derive(serde::Serialize)]
 struct DesktopSnapshot {
     #[serde(flatten)]
@@ -149,7 +172,8 @@ pub fn run() {
             connect_device,
             disconnect_device,
             update_device_settings,
-            select_device
+            select_device,
+            open_project_page
         ])
         .build(tauri::generate_context!())
         .expect("桌面程序初始化失败")

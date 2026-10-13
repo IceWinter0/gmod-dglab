@@ -10,6 +10,7 @@ export interface Snapshot {
 }
 export interface Waveform { id:string; name:string; points:number[]; frequency_codes:number[]; frames:string[]; source:string }
 export const api = {
+  openProjectPage:()=>invoke<void>('open_project_page'),
   connectDevice:(settings:DeviceSettings)=>invoke<void>('connect_device',{settings}),
   disconnectDevice:()=>invoke<void>('disconnect_device'),
   deviceSettings:(settings:DeviceSettings)=>invoke<void>('update_device_settings',{settings}),

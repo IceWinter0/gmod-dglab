@@ -68,6 +68,39 @@ pub fn is_game_path(path: &str) -> bool {
         .file_name()
         .is_some_and(|name| name.to_string_lossy().eq_ignore_ascii_case("gmod.exe"))
 }
+fn process_exited(handle: HANDLE) -> Result<bool, String> {
+    let mut code = 0;
+    // SAFETY: 借用的查询句柄仍由调用者持有；GetExitCodeProcess 只读取进程状态。
+    if unsafe { GetExitCodeProcess(handle, &mut code) } == 0 {
+        return Err("无法核对进程是否已退出".into());
+    }
+    Ok(code != STILL_ACTIVE as u32)
+}
+fn probe_game(pid: u32) -> Result<Option<GameCandidate>, String> {
+    let raw = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid) };
+    if raw.is_null() && unsafe { GetLastError() } == ERROR_INVALID_PARAMETER {
+        return Ok(None);
+    }
+    let handle = Handle::from(raw, "无法查询 GMod 进程")?;
+    if process_exited(handle.0)? {
+        return Ok(None);
+    }
+    let result = (|| {
+        let (path, created_at) = query(handle.0)?;
+        if !is_game_path(&path) || !is_game_client(&modules_for_pid(pid)?) {
+            return Ok(None);
+        }
+        Ok(Some(GameCandidate {
+            pid,
+            path,
+            created_at,
+        }))
+    })();
+    if result.is_err() && process_exited(handle.0)? {
+        return Ok(None);
+    }
+    result.map_err(|error: String| format!("PID {pid}：{error}"))
+}
 pub fn find_games() -> Result<Vec<GameCandidate>, String> {
     // SAFETY: 快照句柄由 RAII 管理，结构大小按 Windows SDK 定义传入。
     unsafe {
@@ -84,25 +117,9 @@ pub fn find_games() -> Result<Vec<GameCandidate>, String> {
         let mut errors = Vec::new();
         while more != 0 {
             if text(&entry.szExeFile).eq_ignore_ascii_case("gmod.exe") {
-                match Handle::from(
-                    OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, entry.th32ProcessID),
-                    "无法查询 GMod 进程",
-                )
-                .and_then(|handle| {
-                    let (path, created_at) = query(handle.0)?;
-                    if !is_game_client(&modules_for_pid(entry.th32ProcessID)?) {
-                        return Ok(None);
-                    }
-                    Ok(Some((path, created_at)))
-                }) {
-                    Ok(Some((path, created_at))) if is_game_path(&path) => {
-                        games.push(GameCandidate {
-                            pid: entry.th32ProcessID,
-                            path,
-                            created_at,
-                        })
-                    }
-                    Ok(_) => {}
+                match probe_game(entry.th32ProcessID) {
+                    Ok(Some(game)) => games.push(game),
+                    Ok(None) => {}
                     Err(e) => errors.push(e),
                 }
             }
@@ -476,6 +493,20 @@ impl Drop for PendingMarker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn exited_native_process_is_not_a_query_failure() {
+        use std::os::windows::process::CommandExt;
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--list")
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let pid = child.id();
+        assert!(child.wait().unwrap().success());
+        assert!(probe_game(pid).unwrap().is_none());
+    }
     #[test]
     fn only_exact_game_name_is_eligible() {
         assert!(is_game_path(r"L:\Steam\bin\win64\gmod.exe"));

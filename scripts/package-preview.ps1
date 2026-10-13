@@ -1,4 +1,4 @@
-﻿param([switch]$SkipBuild)
+﻿param([switch]$SkipBuild, [switch]$Release)
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 function Assert-Amd64([string]$FilePath, [bool]$ExpectedDll) {
@@ -24,7 +24,7 @@ if (!$SkipBuild) {
 Assert-Amd64 $appBinary $false
 Assert-Amd64 $collectorBinary $true
 $releaseRoot = Join-Path $projectRoot 'target/releases'
-$packageName = 'gmod-dglab-0.1.0-windows-x64-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
+$packageName = if ($Release) { 'gmod-dglab-0.1.0-windows-x64' } else { 'gmod-dglab-0.1.0-windows-x64-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') }
 $packageDir = Join-Path $releaseRoot $packageName
 if (Test-Path -LiteralPath $packageDir) { throw '发布目录已经存在，请稍后重试；不会覆盖旧包' }
 New-Item -ItemType Directory -Path (Join-Path $packageDir 'bin') -Force | Out-Null
@@ -38,7 +38,7 @@ Compress-Archive -LiteralPath $packageDir -DestinationPath $binaryZip
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $sourceZip = Join-Path $releaseRoot ($packageName + '-source.zip')
 $archive = [IO.Compression.ZipFile]::Open($sourceZip, [IO.Compression.ZipArchiveMode]::Create)
-$excluded = @('docs','.git','target','node_modules','dist','.codex','.agents','.aws')
+$excluded = @('docs','.git','target','node_modules','dist','gen','.codex','.agents','.aws')
 $sourceExtensions = @('.rs','.toml','.json','.ts','.vue','.css','.html','.ico','.png','.svg','.ps1','.md')
 function Add-SourceFile([string]$FilePath) {
     $sourceFullPath = [IO.Path]::GetFullPath($FilePath)

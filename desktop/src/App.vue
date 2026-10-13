@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import {connectionButton} from './connection';
 import {defaultDeviceSettings,deviceStatus,canStartOutput} from './device';
 import ThemeSelect from './ThemeSelect.vue';
@@ -10,11 +10,16 @@ import brandLogo2x from './assets/gmod-icon-88.png';
 import { defaultConfig, validateConfig, copyConfig, type RuleConfig } from './validation';
 const state=ref<Snapshot|null>(null), draft=ref<RuleConfig>(defaultConfig()), waveforms=ref<Waveform[]>([]);
 const error=ref(''), notice=ref(''), address=ref('127.0.0.1:47831'), busy=ref(false), loaded=ref(false);
+let noticeTimer:ReturnType<typeof setTimeout>|undefined;
+watch(notice,message=>{
+  if(noticeTimer)clearTimeout(noticeTimer);
+  noticeTimer=message?setTimeout(()=>{notice.value='';},20000):undefined;
+},{flush:'sync'});
 const page=ref<'control'|'waves'|'settings'|'developer'>('control');
 const developer=reactive(new DeveloperAccess());
 const selectedGame=ref('');
 const deviceSettings=ref(defaultDeviceSettings()),selectedDevice=ref('');
-const deviceModes=[{value:'app3',label:'APP 3.x'},{value:'app4',label:'APP 4.x'}];
+const deviceModes=[{value:'app3',label:'APP 3.x'},{value:'app4',label:'APP 4.x（实验性）'}];
 const deviceLive=computed(()=>['connecting','waiting_for_app','waiting_for_device','ready'].includes(state.value?.device.phase??'idle'));
 const deviceChoices=computed(()=>state.value?.device.choices.map(device=>({value:device.key,label:device.name}))??[]);
 const gameButton=computed(()=>connectionButton(connected.value,state.value?.connection.phase??'idle'));
@@ -60,6 +65,7 @@ async function action(fn:()=>Promise<void>, message:string) {
 async function connectGame(selected=false){await action(()=>api.connectGame(selected?Number(selectedGame.value):undefined),'');}
 function deviceConfigCopy(){return {...deviceSettings.value};}
 async function connectDevice(){await action(()=>api.connectDevice(deviceConfigCopy()),'');}
+async function openProject(){await action(api.openProjectPage, '');}
 async function applyDeviceSettings(){await action(()=>api.deviceSettings(deviceConfigCopy()),'设备连接设置已保存');}
 async function chooseDevice(){await action(()=>api.selectDevice(selectedDevice.value),'');}
 async function save() { if(validation.value) {error.value=validation.value;return;} await action(()=>api.configure(copyConfig(draft.value)),'规则已保存'); }
@@ -77,7 +83,7 @@ function frequencyPoints(id:string) {const w=waveforms.value.find(w=>w.id===id);
 function points(id:string) { const w=waveforms.value.find(w=>w.id===id); return w?.points.map((v,i)=>`${i*300/Math.max(1,w.points.length-1)},${66-v*48}`).join(' ') ?? ''; }
 function time(ms:number) { return `${Math.floor(ms/60000).toString().padStart(2,'0')}:${Math.floor(ms/1000%60).toString().padStart(2,'0')}.${(ms%1000).toString().padStart(3,'0')}`; }
 onMounted(async()=>{ await refresh(); try {waveforms.value=await api.waveforms();} catch { /* 浏览器页面没有桌面桥接，不制造设备状态。 */ } timer=setInterval(refresh,100); });
-onUnmounted(()=>{if(timer)clearInterval(timer);});
+onUnmounted(()=>{if(timer)clearInterval(timer);if(noticeTimer)clearTimeout(noticeTimer);});
 </script>
 
 <template>
@@ -90,11 +96,11 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
         <button :class="{selected:page==='settings'}" :aria-current="page==='settings'?'page':undefined" @click="page='settings'">设置</button>
         <button v-if="developer.enabled" :class="{selected:page==='developer'}" :aria-current="page==='developer'?'page':undefined" @click="page='developer'">开发者工具</button>
       </nav>
-      <div class="navigation-note"><span class="pill">测试版</span><p>通过郊狼 APP 连接设备</p><small v-if="developer.enabled">开发者模式已开启</small></div>
+      <div v-if="developer.enabled" class="navigation-note"><small>开发者模式已开启</small></div>
     </aside>
     <main class="main-panel">
       <header class="topbar">
-        <div class="global-status"><span class="game-status"><i class="dot" :class="{on:connected}"></i>游戏 {{ connected?'已连接':'未连接' }}<button class="game-connect" :disabled="gameButton.disabled || busy" @click="connectGame()">{{ gameButton.label }}</button></span><span>设备 {{ deviceStatus(state?.device) }}</span><span :class="{running:active}">{{ active?'联动已启用':'联动未启用' }}</span></div>
+        <div class="global-status"><span class="game-status"><i class="dot" :class="{on:connected}"></i>游戏 {{ connected?'已连接':'未连接' }}<button class="game-connect" :disabled="gameButton.disabled || busy" @click="connectGame()">{{ gameButton.label }}</button></span><span>设备 {{ deviceStatus(state?.device) }}</span><span :class="{running:active}">{{ active?'输出 已开启':'输出 未开启' }}</span></div>
         <button class="stop" @click="action(api.stop,'输出已停用，已请求重置强度')">重置强度</button>
       </header>
       <div class="page-content">
@@ -153,7 +159,7 @@ onUnmounted(()=>{if(timer)clearInterval(timer);});
         <template v-else-if="page==='settings'">
           <section class="card"><div class="card-title"><h3>本机连接</h3></div><div class="setting-row"><div><strong>监听地址</strong><p>仅支持本机回环地址</p></div><div class="address-editor"><input v-model="address" aria-label="监听地址" placeholder="127.0.0.1:47831"><button class="secondary" :disabled="busy || !loaded" @click="applyAddress">应用</button></div></div><p class="hint">当前监听：{{ state?.listen_address ?? '—' }}</p></section>
           <section class="card"><details class="device-advanced"><summary>设备连接高级设置</summary><label class="field">APP 3.x 中继地址<input v-model="deviceSettings.v3_url" :disabled="deviceLive" placeholder="wss://ws.dungeon-lab.cn/"></label><label class="field">APP 4.x 中继地址<input v-model="deviceSettings.v4_url" :disabled="deviceLive" placeholder="wss://trex.dungeon-lab.cn/v4"></label><p class="hint">当前连接：{{ state?.device.service_url || '—' }}</p><button class="secondary" :disabled="busy || deviceLive" @click="applyDeviceSettings">保存连接设置</button></details></section>
-          <section class="card"><div class="card-title"><h3>关于应用</h3></div><div class="setting-row"><div><strong>GMod × 郊狼</strong><p>Windows x64 · 测试版</p></div><button class="version-button" @click="unlockDeveloper">v0.1.0</button></div><div class="setting-row"><div><strong>开源许可</strong><p>GPL-3.0</p></div><span class="hint">官方波形数据随附许可说明</span></div><p class="hint">通过 APP 的 SOCKET 控制连接郊狼 3.0；连接成功后需手动启用输出。</p></section>
+          <section class="card"><div class="card-title"><h3>关于应用</h3></div><div class="setting-row"><div><strong>GMod × 郊狼</strong><p>Windows x64</p></div><button class="version-button" @click="unlockDeveloper">v0.1.0</button></div><div class="setting-row"><div><strong>作者</strong><p>IceWinter</p></div><a class="text-button" href="https://github.com/IceWinter0/gmod-dglab" @click.prevent="openProject">GitHub 仓库 ↗</a></div><div class="setting-row"><div><strong>开源许可</strong><p>GPL-3.0</p></div><span class="hint">官方波形数据随附许可说明</span></div></section>
           <section v-if="developer.enabled" class="card"><div class="setting-row"><div><strong>开发者模式</strong><p>仅本次运行有效，重启后恢复隐藏</p></div><button class="secondary" @click="exitDeveloper">退出开发者模式</button></div></section>
         </template>
         <template v-else-if="page==='developer' && developer.enabled">
