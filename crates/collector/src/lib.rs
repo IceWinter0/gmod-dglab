@@ -1,6 +1,7 @@
 #[cfg(not(all(windows, target_arch = "x86_64")))]
 compile_error!("采集 DLL 仅支持 Windows x64");
 mod native;
+mod netvars;
 mod transport;
 use core::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};

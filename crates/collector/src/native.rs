@@ -105,8 +105,15 @@ pub fn inspect() -> io::Result<String> {
         0x519540,
         &[("VClient017", 0x87a6d0), ("VClientEntityList003", 0x9df7a8)],
     )?;
+    let wide: Vec<u16> = "client.dll".encode_utf16().chain(Some(0)).collect();
+    // SAFETY: 上面已核对该已加载模块，这里只取得基址做只读元数据诊断。
+    let client_base = unsafe { GetModuleHandleW(wide.as_ptr()) } as usize;
+    let properties = match crate::netvars::inspect(client_base) {
+        Ok(report) => report,
+        Err(error) => format!("属性表诊断未完成：{error}"),
+    };
     Ok(format!(
-        "{engine}\n{client}\n当前仅诊断接口，未启用玩家采样或设备输出。"
+        "{engine}\n{client}\n{properties}\n当前仅诊断接口与属性元数据，未启用玩家采样或设备输出。"
     ))
 }
 
