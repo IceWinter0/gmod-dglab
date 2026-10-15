@@ -55,7 +55,7 @@ pub fn load_settings() -> (PanelSettings, Option<String>) {
         Ok(s) => (s, None),
         Err(e) => (
             PanelSettings::default(),
-            Some(format!("{e}，已使用默认停用配置")),
+            Some(format!("{e}。已恢复默认设置，输出保持关闭")),
         ),
     }
 }
@@ -202,7 +202,7 @@ impl ControllerHub {
                     .lock()
                     .unwrap()
                     .core
-                    .note("原选定导入波形不可用，回退到官方呼吸波形");
+                    .note("此前选择的导入波形不可用，已改用官方呼吸波形");
             }
         }
         hub.shared
@@ -292,7 +292,7 @@ impl ControllerHub {
             .lock()
             .unwrap()
             .core
-            .note(format!("已处理 {count} 种导入波形，重复条目自动去重"));
+            .note(format!("波形导入完成，共读取 {count} 种波形，重复项已自动跳过"));
         Ok(count)
     }
     pub fn note(&mut self, message: &str) {
@@ -304,7 +304,7 @@ impl ControllerHub {
             return Err("游戏进程 ID 无效".into());
         }
         if s.connected {
-            return Err("游戏已经连接，不重复注入".into());
+            return Err("游戏已连接，无需再次连接".into());
         }
         s.expected = Some((pid, allow_legacy));
         Ok(())
@@ -318,13 +318,13 @@ impl ControllerHub {
     }
     pub fn set_address(&mut self, address: SocketAddr) -> Result<(), String> {
         if !address.ip().is_loopback() || (address.port() == 0 && self.persist) {
-            return Err("仅允许回环地址与 1..65535 端口".into());
+            return Err("仅支持本机回环地址，端口范围为 1～65535".into());
         }
         if self.address() == Some(address) {
             return Ok(());
         }
         let listener = TcpListener::bind(address)
-            .map_err(|e| format!("无法监听 {address}：{e}。请关闭旧接收器或修改端口"))?;
+            .map_err(|e| format!("无法监听 {address}：{e}。请关闭占用此端口的程序，或修改监听端口"))?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let actual = listener.local_addr().map_err(|e| e.to_string())?;
         let token = runtime::random_token().map_err(|e| e.to_string())?;
@@ -377,7 +377,7 @@ impl ControllerHub {
                                         s.connected = true;
                                         s.process_id = process_id;
                                         s.heartbeat_at = Some(now);
-                                        s.core.note("游戏已认证连接");
+                                        s.core.note("游戏连接成功，身份验证已通过");
                                     }
                                     Message::Heartbeat { .. } => {
                                         s.heartbeat_at = Some(now);

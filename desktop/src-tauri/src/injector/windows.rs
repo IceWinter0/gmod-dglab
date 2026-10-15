@@ -472,7 +472,7 @@ impl PendingMarker {
             .open(&path)
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    "此游戏还有未确认的 DLL 加载，请等待或重启游戏；不会重复注入".into()
+                    "上一次游戏连接尚未完成，请稍候；若长时间没有响应，请重启游戏后重试".into()
                 } else {
                     format!("无法建立加载标记：{e}")
                 }

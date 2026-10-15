@@ -42,17 +42,17 @@ unsafe extern "system" fn worker(_arg: *mut c_void) -> u32 {
         STATUS.store(3, Ordering::Release);
         return 1;
     }
-    log("开始 Windows x64 玩家采样预览；不连接郊狼。");
+    log("正在连接游戏，检查游戏接口、函数特征与玩家属性。");
     for attempt in 0..60 {
         if STOP.load(Ordering::Acquire) {
             break;
         }
         match native::inspect() {
-            Ok(report) => {
+            Ok((report, resolved)) => {
                 log(&report);
-                let hook = match sampling::Hook::install() {
+                let hook = match sampling::Hook::install(resolved) {
                     Ok(hook) => {
-                        log("已接入网络更新结束回调；读取本地玩家，未知护甲保持不可用。");
+                        log("玩家状态采样已启动，在游戏网络更新后读取血量、生命状态及可用的护甲数据。");
                         Some(hook)
                     }
                     Err(error) => {
@@ -62,7 +62,7 @@ unsafe extern "system" fn worker(_arg: *mut c_void) -> u32 {
                 };
                 while !STOP.load(Ordering::Acquire) {
                     if let Err(error) = transport::connect_and_heartbeat() {
-                        log(&format!("本机诊断连接：{error}"));
+                        log(&format!("与本机接收程序的连接中断或失败：{error}"));
                     }
                     log(&sampling::statistics());
                     for _ in 0..20 {
@@ -74,20 +74,20 @@ unsafe extern "system" fn worker(_arg: *mut c_void) -> u32 {
                 }
                 if let Some(hook) = hook {
                     if let Err(error) = hook.stop() {
-                        log(&format!("恢复原始回调：{error}"));
+                        log(&format!("恢复游戏原始回调失败：{error}"));
                     }
                 }
                 break;
             }
             Err(error) => {
                 if attempt == 0 || attempt == 59 {
-                    log(&format!("接口诊断：{error}"));
+                    log(&format!("暂时无法读取游戏状态：{error}"));
                 }
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
         }
     }
-    log("诊断线程结束；请退出游戏卸载此诊断 DLL。");
+    log("游戏状态读取已停止。如需重新连接，请重启游戏后在面板中点击“连接游戏”。");
     STATUS.store(3, Ordering::Release);
     0
 }

@@ -70,7 +70,7 @@ fn choose_game(
             })
             .cloned()
             .map(Some)
-            .ok_or_else(|| "所选游戏已退出或 PID 已变化，请重新查找".into());
+            .ok_or_else(|| "所选游戏进程已退出或发生变化，请重新连接".into());
     }
     if games.len() == 1 {
         Ok(Some(games[0].clone()))
@@ -122,7 +122,7 @@ impl Inner {
         if !process.has_collector()? {
             self.phase(
                 ConnectPhase::Injecting,
-                format!("正在向游戏 PID {} 加载采样 DLL", candidate.pid),
+                format!("正在加载游戏采样模块（PID {}）", candidate.pid),
             );
             let path = collector_path(&std::env::current_exe().map_err(|e| e.to_string())?)?;
             if self.stop.load(Ordering::Acquire) {
@@ -139,7 +139,7 @@ impl Inner {
                     windows::LoadProgress::Completed => break,
                     windows::LoadProgress::Running => {
                         if started.elapsed() >= Duration::from_secs(5) && !noted {
-                            self.phase(ConnectPhase::Injecting,"加载线程仍在运行，将继续等待；不会重复注入。若游戏无响应请由你手动退出游戏");
+                            self.phase(ConnectPhase::Injecting,"采样模块仍在加载，请稍候。如果游戏长时间无响应，请手动关闭游戏后重试");
                             noted = true;
                         }
                         thread::sleep(Duration::from_millis(100));
@@ -150,14 +150,14 @@ impl Inner {
             drop(job);
             if !process.has_collector()? {
                 return Err(
-                    "Windows 加载结束，但未发现采样模块。请检查 bin DLL、运行权限和本机诊断日志"
+                    "加载操作已结束，但未检测到采样模块。请确认已完整解压 bin 文件夹，并检查运行权限和诊断日志"
                         .into(),
                 );
             }
         }
         self.phase(
             ConnectPhase::Waiting,
-            "采样 DLL 已加载，等待游戏认证连接（最多 15 秒）",
+            "采样模块已加载，正在等待游戏连接（最多 15 秒）",
         );
         let started = Instant::now();
         while started.elapsed() < Duration::from_secs(15) {
@@ -180,7 +180,7 @@ impl Inner {
             }
             thread::sleep(Duration::from_millis(100));
         }
-        Err("等待游戏连接超时。已加载的 DLL 不会重复注入；请查看 collector-diagnostic.log，旧版或未适配版本需重启游戏后重试".into())
+        Err("游戏连接超时，未收到游戏状态。请查看诊断日志 collector-diagnostic.log 了解原因；若提示游戏版本不受支持，请检查程序更新。更新后请重启游戏再连接。".into())
     }
 }
 fn collector_path(executable: &std::path::Path) -> Result<PathBuf, String> {
@@ -221,7 +221,7 @@ impl Injector {
                 .find(|g| g.pid == pid);
             if selected.is_none() {
                 self.inner.running.store(false, Ordering::Release);
-                return Err("候选进程已失效，请重新查找".into());
+                return Err("所选游戏进程已不可用，请重新连接".into());
             }
             selected
         } else {
@@ -235,7 +235,7 @@ impl Injector {
             .spawn(move || {
                 let result = inner.attempt(selected, &hub);
                 if let Err(error) = result {
-                    let log = format!("游戏连接：{error}");
+                    let log = format!("游戏连接失败：{error}");
                     hub.lock().unwrap().note(&log);
                     inner.phase(ConnectPhase::Failed, error);
                 }
