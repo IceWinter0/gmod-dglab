@@ -55,7 +55,7 @@ impl OutputScheduler {
             .is_some_and(|last| now < last || now.saturating_sub(last) > 1000)
         {
             self.reset();
-            return Err("输出调度延迟，已停用输出".into());
+            return Err("强度更新未能及时完成，输出已停用".into());
         }
         self.last_ms = Some(now);
         for (i, channel) in input.channels.iter().enumerate() {

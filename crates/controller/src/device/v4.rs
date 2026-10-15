@@ -345,7 +345,7 @@ impl V4Session {
             return Err("APP 尚未配对".into());
         }
         if self.pending.len() >= 32 {
-            return Err("APP 未完成指令过多，输出已停用".into());
+            return Err("等待 APP 确认的指令过多，输出已停用".into());
         }
         self.next_req += 1;
         let req_id = format!("{}-{}", self.client, self.next_req);

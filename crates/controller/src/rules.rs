@@ -244,7 +244,7 @@ impl ControllerCore {
         }
         self.config = config;
         self.refresh();
-        self.note("规则配置已保存");
+        self.note("联动规则已更新");
         Ok(())
     }
     pub fn set_preview(&mut self, enabled: bool, now_ms: u64) -> Result<(), String> {
@@ -258,7 +258,7 @@ impl ControllerCore {
         }
         self.refresh();
         self.note(if enabled {
-            "输出已开启，基础强度已生效"
+            "输出已开启，将按当前规则设置强度"
         } else {
             "输出已关闭"
         });
@@ -328,10 +328,10 @@ impl ControllerCore {
         }
         self.now = now_ms;
         if self.injury.expire(now_ms, self.config.injury_cooldown_ms) {
-            self.note("受伤增量到期，进入受伤冷却");
+            self.note("受伤额外强度的持续时间已结束，开始冷却");
         }
         if self.death.expire(now_ms, self.config.death_cooldown_ms) {
-            self.note("死亡增量到期，进入死亡冷却");
+            self.note("死亡额外强度的持续时间已结束，开始冷却");
         }
         self.refresh();
     }
@@ -363,9 +363,9 @@ impl ControllerCore {
                 death_priority,
             } => {
                 self.note(format!(
-                    "掉血：{before} → {after}{}",
+                    "血量下降：{before} → {after}{}",
                     if death_priority {
-                        "（死亡优先，致命掉血不重复计入受伤增量）"
+                        "（致命伤害，不再额外触发受伤联动）"
                     } else {
                         ""
                     }
@@ -382,7 +382,7 @@ impl ControllerCore {
                     return;
                 }
                 if self.now < self.injury.cooldown_until {
-                    self.note("受伤冷却中，本次掉血不增加或刷新强度");
+                    self.note("受伤联动冷却中，本次掉血不会增加强度或延长持续时间");
                     return;
                 }
                 let loss = (i64::from(before) - i64::from(after)).max(0) as f64;
@@ -403,7 +403,7 @@ impl ControllerCore {
                     }
                 }
                 if missing_max {
-                    self.note("最大生命值不可用，跳过百分比映射通道");
+                    self.note("未获取到最大生命值，本次伤害不计入使用百分比映射的通道");
                 }
                 if mapped && self.injury.extra.iter().any(|v| *v > 0.0) {
                     self.injury.until = Some(self.now.saturating_add(self.config.duration_ms));
@@ -412,12 +412,12 @@ impl ControllerCore {
                 self.log_target();
             }
             GameEvent::Died => {
-                self.note("死亡：保留已有受伤增量，计算独立死亡增量");
+                self.note("玩家已死亡");
                 if !self.enabled || !self.config.death_enabled || self.player.is_none() {
                     return;
                 }
                 if self.now < self.death.cooldown_until {
-                    self.note("死亡冷却中，本次死亡不增加或刷新强度");
+                    self.note("死亡联动冷却中，本次死亡不会增加强度或延长持续时间");
                     return;
                 }
                 for (i, c) in self.config.channels.iter().enumerate() {
@@ -439,10 +439,10 @@ impl ControllerCore {
                 self.injury.cancel(self.now, self.config.injury_cooldown_ms);
                 self.death.cancel(self.now, self.config.death_cooldown_ms);
                 self.refresh();
-                self.note("重生：清空临时增量，按当前模式重新计算；独立冷却继续计时");
+                self.note("玩家已重生，受伤和死亡的临时增量已清空；强度按当前规则重新计算，冷却继续计时");
             }
             GameEvent::ArmorDecreased { before, after } => {
-                self.note(format!("护甲减少：{before} → {after}（暂不参与规则）"));
+                self.note(format!("护甲减少：{before} → {after}（不触发强度联动）"));
             }
         }
     }

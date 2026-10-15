@@ -30,7 +30,7 @@ const selected=computed(()=>waveforms.value.find(w=>w.id===selectedWave.value));
 const waveformOptions=computed(()=>waveforms.value.map(w=>({value:w.id,label:`${w.name} · ${w.source}`})));
 const injuryModes=[{value:'accumulate',label:'连续受伤累加'},{value:'health_deficit',label:'按缺失生命值计算'}] as const;
 const mappingUnits=[{value:'points',label:'每 1 点血量'},{value:'percent',label:'每 1% 最大生命值'}] as const;
-const deathChannelOptions=[{value:'all',label:'所有已开启联动的通道'},{value:'a',label:'仅 A 通道（需开启联动）'},{value:'b',label:'仅 B 通道（需开启联动）'}] as const;
+const deathChannelOptions=[{value:'all',label:'所有已开启输出的通道'},{value:'a',label:'仅 A 通道（需开启输出）'},{value:'b',label:'仅 B 通道（需开启输出）'}] as const;
 const pageTitle=computed(()=>({control:'强度控制',waves:'波形管理',settings:'设置',developer:'开发者工具'})[page.value]);
 function unlockDeveloper() {
   if(developer.enabled){notice.value='开发者模式已开启';return;}
@@ -53,7 +53,7 @@ async function refresh() {
   try {
     state.value=await api.state();
     if(!loaded.value) { draft.value=copyConfig(state.value.controller.config); address.value=state.value.listen_address; deviceSettings.value={...state.value.device_settings}; loaded.value=true; }
-  } catch { error.value='无法连接桌面控制核心，请通过 Windows 桌面程序打开此面板。'; }
+  } catch { error.value='无法连接应用服务，请使用 Windows 桌面程序打开面板。'; }
   finally { polling=false; }
 }
 async function action(fn:()=>Promise<void>, message:string) {
@@ -70,7 +70,7 @@ async function applyDeviceSettings(){await action(()=>api.deviceSettings(deviceC
 async function chooseDevice(){await action(()=>api.selectDevice(selectedDevice.value),'');}
 async function save() { if(validation.value) {error.value=validation.value;return;} await action(()=>api.configure(copyConfig(draft.value)),'规则已保存'); }
 async function togglePreview() { await action(()=>api.preview(!active.value),active.value?'输出已关闭':'输出已开启'); }
-async function applyAddress() { await action(()=>api.listen(address.value),'监听地址已更新，请等待 DLL 重连'); }
+async function applyAddress() { await action(()=>api.listen(address.value),'监听地址已更新，正在等待游戏重新连接'); }
 async function importFile(event:Event) {
   const input=event.target as HTMLInputElement; const file=input.files?.[0]; if(!file)return;
   if(file.size>1024*1024) {error.value='波形文件不能超过 1 MiB';input.value='';return;}
@@ -120,10 +120,10 @@ onUnmounted(()=>{if(timer)clearInterval(timer);if(noticeTimer)clearTimeout(notic
             <div class="device-controls" v-if="deviceChoices.length"><ThemeSelect v-model="selectedDevice" :options="deviceChoices" label="郊狼 3.0 设备"/><button class="secondary" :disabled="busy || !selectedDevice" @click="chooseDevice">选择设备</button></div>
           </section>
           <section class="card player-card">
-            <div class="card-title"><h3>玩家状态</h3><span class="pill">{{ player ? (player.life_state===0?'存活':'死亡 / 过渡状态') : '暂无有效玩家' }}</span></div>
+            <div class="card-title"><h3>玩家状态</h3><span class="pill">{{ player ? (player.life_state===0?'存活':'死亡或重生中') : '等待玩家进入游戏' }}</span></div>
             <div class="health-line"><div><span class="eyebrow">血量</span><div class="health-value">{{ player?.health ?? '—' }} <small>/ {{ state?.controller.max_health ?? '—' }}</small></div></div><div class="armor"><span class="eyebrow">护甲</span><strong>{{ player?.armor ?? '不可用' }}</strong></div></div>
             <div class="health-track"><div :style="{width:`${healthPercent}%`}"></div></div>
-            <p class="hint">{{ player && !state?.controller.max_health ? '最大生命值不可用：缺失生命值模式和百分比映射暂不计算。' : '按客户端血量变化计算，可能合并多次伤害。' }}</p>
+            <p class="hint">{{ player && !state?.controller.max_health ? '未获取到最大生命值，暂时无法按缺失生命值或生命值百分比计算强度。' : '根据游戏中的血量变化计算强度，短时间内的多次伤害可能合并计算。' }}</p>
           </section>
           <section class="card mapping">
             <div class="card-title"><h3>通道强度</h3><span class="hint">当前强度由 APP 回传</span></div>
@@ -141,19 +141,19 @@ onUnmounted(()=>{if(timer)clearInterval(timer);if(noticeTimer)clearTimeout(notic
           </section>
           <section class="card rules">
             <div class="card-title"><h3>联动规则</h3></div>
-            <div class="setting-row"><div><strong>受伤强度模式</strong><p>{{ draft.injury_mode==='health_deficit'?'随存活玩家当前血量持续计算，回血时降低；不使用受伤时长和冷却':'每次受伤增加强度，并重新计时' }}</p></div><ThemeSelect v-model="draft.injury_mode" :options="injuryModes" label="受伤强度模式"/></div>
+            <div class="setting-row"><div><strong>受伤强度模式</strong><p>{{ draft.injury_mode==='health_deficit'?'存活时按缺失血量计算额外强度，回血时降低；不使用持续时间和冷却':'每次受伤增加强度，并重新计时' }}</p></div><ThemeSelect v-model="draft.injury_mode" :options="injuryModes" label="受伤强度模式"/></div>
             <div class="setting-row"><div><strong>受伤联动</strong><p>{{ draft.injury_mode==='health_deficit'?'强度随缺失血量变化，回血时降低，无需设置持续时间':'按所选单位累加额外强度，每次受伤刷新持续时间' }}</p></div><label class="row-input">持续时间<input type="number" min="100" max="10000" step="100" v-model.number="draft.duration_ms" :disabled="draft.injury_mode==='health_deficit'"><span>ms</span></label></div>
-            <div class="setting-row"><div><strong>受伤冷却</strong><p>{{ draft.injury_mode==='health_deficit'?'此模式无需设置冷却时间':'受伤增量结束后开始，0 秒关闭；不影响死亡联动' }}</p></div><label class="row-input">冷却时间<input type="number" min="0" max="60" step="0.1" :value="draft.injury_cooldown_ms/1000" @input="setCooldown('injury_cooldown_ms',$event)" :disabled="draft.injury_mode==='health_deficit'"><span>秒</span></label></div>
+            <div class="setting-row"><div><strong>受伤冷却</strong><p>{{ draft.injury_mode==='health_deficit'?'此模式无需设置冷却时间':'额外强度持续时间结束后开始冷却，设为 0 秒可关闭；不影响死亡联动' }}</p></div><label class="row-input">冷却时间<input type="number" min="0" max="60" step="0.1" :value="draft.injury_cooldown_ms/1000" @input="setCooldown('injury_cooldown_ms',$event)" :disabled="draft.injury_mode==='health_deficit'"><span>秒</span></label></div>
             <div class="setting-row"><div><label class="switch-label"><input type="checkbox" v-model="draft.death_enabled"><strong>死亡联动</strong></label><p>死亡时额外增加强度，不超过通道强度上限</p></div><label class="row-input">额外强度<input type="number" min="0" max="200" v-model.number="draft.death_strength" :disabled="!draft.death_enabled"></label></div>
             <details class="advanced"><summary>死亡联动高级设置</summary><div class="setting-row"><label>作用通道</label><ThemeSelect v-model="draft.death_channels" :disabled="!draft.death_enabled" :options="deathChannelOptions" label="死亡联动通道"/></div><div class="setting-row"><label class="row-input">持续时间<input type="number" min="100" max="10000" step="100" v-model.number="draft.death_duration_ms" :disabled="!draft.death_enabled"><span>ms</span></label><label class="row-input">冷却时间<input type="number" min="0" max="60" step="0.1" :value="draft.death_cooldown_ms/1000" @input="setCooldown('death_cooldown_ms',$event)" :disabled="!draft.death_enabled"><span>秒</span></label></div></details>
-            <p class="hint">启用输出后保持基础强度；受伤和死亡分别计时、冷却；重置或连接断开时强度归零</p>
+            <p class="hint">启用输出后保持基础强度，受伤和死亡分别计时、冷却。重置或连接断开时会请求设备归零，请在 APP 中确认。</p>
           </section>
           <section class="card recent-events"><div class="card-title"><h3>最近事件</h3><button v-if="developer.enabled" class="text-button" @click="page='developer'">完整日志 ↗</button></div><p v-if="!logs.length" class="hint">等待游戏事件</p><div v-for="entry in logs.slice(0,3)" :key="entry.id" class="compact-log"><time>{{ time(entry.at_ms) }}</time><span>{{ entry.text }}</span></div></section>
         </template>
         <template v-else-if="page==='waves'">
           <div class="wave-browser">
             <section class="card wave-library"><div class="card-title"><h3>波形库</h3><span class="pill">{{ waveforms.length }} 种</span></div><input v-model="search" aria-label="搜索波形" placeholder="搜索名称或来源"><div class="wave-list"><button v-for="w in visibleWaves" :key="w.id" :class="{selected:w.id===selectedWave}" @click="selectedWave=w.id"><strong>{{ w.name }}</strong><small>{{ w.source }}</small></button><p v-if="!visibleWaves.length" class="hint">没有匹配的波形</p></div><label class="field import-control">导入波形 JSON<input type="file" accept=".json,application/json" :disabled="busy || !loaded" @change="importFile"></label></section>
-            <section class="card wave-detail"><div class="card-title"><h3>{{ selected?.name ?? '请选择波形' }}</h3><span v-if="selected" class="pill">{{ selected.source }}</span></div><svg class="wave" viewBox="0 0 300 80" role="img" aria-label="波形预览"><path class="gridline" d="M0 20H300M0 45H300M0 70H300"/><polyline class="frequency-line" :points="frequencyPoints(selectedWave)"/><polyline :points="points(selectedWave)"/></svg><div class="wave-legend"><span>— 相对幅度</span><span>┄ 频率参数</span></div><p class="hint">{{ selected ? waveHint(selectedWave) : '波形库加载后可选择预览' }}</p><p class="hint">曲线表示波形参数，并非设备真实电流测量。</p></section>
+            <section class="card wave-detail"><div class="card-title"><h3>{{ selected?.name ?? '请选择波形' }}</h3><span v-if="selected" class="pill">{{ selected.source }}</span></div><svg class="wave" viewBox="0 0 300 80" role="img" aria-label="波形预览"><path class="gridline" d="M0 20H300M0 45H300M0 70H300"/><polyline class="frequency-line" :points="frequencyPoints(selectedWave)"/><polyline :points="points(selectedWave)"/></svg><div class="wave-legend"><span>— 相对幅度</span><span>┄ 频率参数</span></div><p class="hint">{{ selected ? waveHint(selectedWave) : '波形库加载后可选择预览' }}</p><p class="hint">曲线用于预览波形参数，不代表设备的实测电流。</p></section>
           </div>
         </template>
         <template v-else-if="page==='settings'">

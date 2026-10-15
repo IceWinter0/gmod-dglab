@@ -105,7 +105,7 @@ fn walk(
             "m_iHealth" | "m_iArmor" | "m_ArmorValue" | "m_lifeState" | "m_iMaxHealth"
         ) {
             lines.push(format!(
-                "  {child_path}：偏移 0x{offset:x}，类型 {}，代理 RVA 另待核对",
+                "  {child_path}：偏移 0x{offset:x}，类型 {}，代理 RVA 未验证",
                 prop.kind
             ));
         }
@@ -117,9 +117,9 @@ fn walk(
     Ok(())
 }
 
-pub fn inspect(client_base: usize) -> io::Result<String> {
-    // 0x95F748 来自当前已验证构建 GetAllClasses 的 RIP 相对加载，避免工作线程调用游戏方法。
-    let mut class = pointer(client_base + 0x95f748)?;
+pub fn inspect(classes: usize) -> io::Result<String> {
+    // 从已验证的 GetAllClasses 指令中解析全局指针，不调用游戏方法。
+    let mut class = pointer(classes)?;
     let mut visited = HashSet::new();
     let mut lines = vec![];
     while class != 0 {
@@ -145,7 +145,7 @@ pub fn inspect(client_base: usize) -> io::Result<String> {
         return Err(io::Error::other("尚未发现玩家客户端类，属性解析未完成"));
     }
     Ok(format!(
-        "已遍历 {} 个客户端类；以下是玩家属性候选，不视为已完成采样：\n{}",
+        "已遍历 {} 个客户端类，找到以下玩家属性候选（此列表仅用于诊断，采样状态请查看后续日志）：\n{}",
         visited.len(),
         lines.join("\n")
     ))
@@ -158,8 +158,8 @@ pub struct PlayerOffsets {
     pub life_state: usize,
     pub armor: Option<usize>,
 }
-pub fn resolve_player(client_base: usize) -> io::Result<PlayerOffsets> {
-    let mut class = pointer(client_base + 0x95f748)?;
+pub fn resolve_player(classes: usize, client: &native::Module) -> io::Result<PlayerOffsets> {
+    let mut class = pointer(classes)?;
     let mut visited = HashSet::new();
     while class != 0 {
         if visited.len() >= 2048 || !visited.insert(class) {
@@ -170,14 +170,16 @@ pub fn resolve_player(client_base: usize) -> io::Result<PlayerOffsets> {
         if name == "CGMOD_Player" {
             return resolve_chain(
                 usize_at(&data, 24).ok_or_else(|| io::Error::other("玩家表无效"))?,
-                client_base,
+                client,
             );
         }
         class = usize_at(&data, 32).ok_or_else(|| io::Error::other("玩家类后继无效"))?;
     }
-    Err(io::Error::other("未发现 CGMOD_Player，拒绝猜测玩家类型"))
+    Err(io::Error::other(
+        "未找到受支持的玩家类型 CGMOD_Player，无法采样玩家状态",
+    ))
 }
-fn resolve_chain(mut table: usize, client_base: usize) -> io::Result<PlayerOffsets> {
+fn resolve_chain(mut table: usize, client: &native::Module) -> io::Result<PlayerOffsets> {
     let mut visited = HashSet::new();
     let (mut health, mut max_health, mut life_state, mut armor) = (None, None, None, None);
     while table != 0 {
@@ -202,8 +204,14 @@ fn resolve_chain(mut table: usize, client_base: usize) -> io::Result<PlayerOffse
             };
             let name = text(prop.name)?;
             if name == "baseclass" && prop.kind == 6 {
-                if prop.offset != 0 || usize_at(&data, 56) != Some(client_base + 0x235480) {
+                if prop.offset != 0 {
                     return Err(io::Error::other("玩家继承代理不是已核对的静态基址代理"));
+                }
+                let proxy =
+                    usize_at(&data, 56).ok_or_else(|| io::Error::other("玩家继承代理无效"))?;
+                client.code(proxy, native::BASE_PROXY)?;
+                if parent != 0 {
+                    return Err(io::Error::other("玩家属性表存在多个继承定义"));
                 }
                 parent = prop.child;
             }
@@ -218,13 +226,13 @@ fn resolve_chain(mut table: usize, client_base: usize) -> io::Result<PlayerOffse
                 };
                 if let Some(target) = target {
                     let expected = if name == "m_lifeState" {
-                        0x235900
+                        native::BYTE_PROXY
                     } else {
-                        0x2358e0
+                        native::INT_PROXY
                     };
-                    if proxy != client_base + expected {
-                        return Err(io::Error::other(format!("{name} 的存储宽度代理未核对")));
-                    }
+                    client.code(proxy, expected).map_err(|error| {
+                        io::Error::other(format!("{name} 的存储宽度代理特征不符：{error}"))
+                    })?;
                     if target.replace(prop.offset).is_some() {
                         return Err(io::Error::other(format!("{name} 存在多个标量定义")));
                     }
