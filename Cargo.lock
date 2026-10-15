@@ -1142,7 +1142,7 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "gmod-dglab-collector"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gmod-dglab-common",
  "serde_json",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "gmod-dglab-common"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1160,7 +1160,7 @@ dependencies = [
 
 [[package]]
 name = "gmod-dglab-controller"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gmod-dglab-common",
  "qrcode",
@@ -1173,7 +1173,7 @@ dependencies = [
 
 [[package]]
 name = "gmod-dglab-desktop"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gmod-dglab-common",
  "gmod-dglab-controller",
@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "gmod-dglab-diagnostic"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "gmod-dglab-common",
  "serde_json",

@@ -12,7 +12,7 @@
 
 ### 使用教程
 
-1. 前往 [Releases](https://github.com/IceWinter0/gmod-dglab/releases/latest)，下载 `gmod-dglab-0.1.0-windows-x64.zip` 并完整解压。保留 `bin` 目录，运行 `gmod-dglab.exe`。
+1. 前往 [Releases](https://github.com/IceWinter0/gmod-dglab/releases/latest)，下载 `gmod-dglab-0.1.1-windows-x64.zip` 并完整解压。保留 `bin` 目录，运行 `gmod-dglab.exe`。
 2. 启动 GMod x64，进入游戏地图。点击面板顶部的“连接游戏”，等待显示已连接；连接失败时可点击“重新连接”。
 3. 在手机 APP 中连接郊狼 3.0。在面板中选择对应的 APP 版本，点击“连接设备”，然后打开 APP 的 **SOCKET 控制**并扫描面板二维码。
 4. 等待设备强度与上限回传。在 A/B 通道勾选“开启输出”，设置基础强度、强度上限、映射率和当前波形，点击“保存规则”。
@@ -72,7 +72,7 @@ A/B 通道可以分别设置基础强度、强度上限、映射率和波形。�
 
 确认启动的是 Windows x64 分支，并等待游戏加载完成。存在多个游戏客户端时，可在面板中选择对应进程；Chromium 辅助进程不会作为游戏客户端列出。
 
-权限不足时，请检查面板与游戏的运行权限。游戏版本未适配时，采样 DLL 会拒绝加载。连接日志位于 `%LOCALAPPDATA%\gmod-dglab\collector-diagnostic.log`。
+权限不足时，请检查面板与游戏的运行权限。采样 DLL 不按游戏版本号或时间戳拒绝接入，而是检查接口注册、函数指令特征和玩家属性结构；必要特征不匹配时停止采样。连接日志位于 `%LOCALAPPDATA%\gmod-dglab\collector-diagnostic.log`。
 
 ### 升级后仍使用旧 DLL
 
