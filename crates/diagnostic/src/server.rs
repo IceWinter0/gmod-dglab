@@ -4,7 +4,7 @@ pub fn receive(stream: TcpStream, token: String) -> io::Result<usize> {
     gmod_dglab_common::receiver::receive(stream, token, &AtomicBool::new(false), |message| {
         match message {
             Message::Hello { module_id, .. } => {
-                println!("游戏已认证：{module_id}");
+                println!("游戏连接成功，身份验证已通过：{module_id}");
             }
             Message::Heartbeat { seq, .. } => println!("游戏心跳：{seq}"),
             Message::Event { data, .. } => {
@@ -25,12 +25,19 @@ pub fn receive(stream: TcpStream, token: String) -> io::Result<usize> {
                         before,
                         after,
                         death_priority,
-                    } => println!("掉血事件：{before} → {after}，死亡优先 {death_priority}"),
+                    } => println!(
+                        "血量下降：{before} → {after}{}",
+                        if death_priority {
+                            "（致命伤害，不再额外触发受伤联动）"
+                        } else {
+                            ""
+                        }
+                    ),
                     GameEvent::ArmorDecreased { before, after } => {
                         println!("护甲减少：{before} → {after}")
                     }
-                    GameEvent::Died => println!("死亡事件"),
-                    GameEvent::Respawned => println!("重生事件"),
+                    GameEvent::Died => println!("玩家已死亡"),
+                    GameEvent::Respawned => println!("玩家已重生"),
                 }
             }
         }

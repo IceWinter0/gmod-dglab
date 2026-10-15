@@ -1,8 +1,4 @@
-use crate::{
-    native,
-    netvars::{self, PlayerOffsets},
-    STOP,
-};
+use crate::{native, netvars::PlayerOffsets, STOP};
 use core::ffi::c_void;
 use gmod_dglab_common::{
     queue::EventQueue,
@@ -59,37 +55,16 @@ struct Bindings {
     offsets: PlayerOffsets,
 }
 
-fn pointer(address: usize) -> io::Result<usize> {
-    native::read::<8>(address)
-        .map(usize::from_le_bytes)
-        .ok_or_else(|| io::Error::other("原生指针不可读"))
-}
-fn method(object: usize, index: usize, expected: usize) -> io::Result<usize> {
-    let table = pointer(object)?;
-    let address = pointer(
-        table
-            .checked_add(index * 8)
-            .ok_or_else(|| io::Error::other("虚表地址溢出"))?,
-    )?;
-    if address != expected {
-        return Err(io::Error::other("虚函数已被修改或版本不符，拒绝接入"));
-    }
-    Ok(address)
-}
 impl Bindings {
-    fn prepare() -> io::Result<Self> {
-        let engine = native::base("engine.dll")?;
-        let client = native::base("client.dll")?;
-        let engine_object = engine + 0x4993c0;
-        let entities = client + 0x9df7a8;
-        Ok(Self {
-            engine: engine_object,
-            entities,
-            local_fn: method(engine_object, 12, engine + 0x795e0)?,
-            in_game_fn: method(engine_object, 26, engine + 0x79af0)?,
-            entity_fn: method(entities, 3, client + 0x20ab00)?,
-            offsets: netvars::resolve_player(client)?,
-        })
+    fn prepare(resolved: &native::Resolved) -> Self {
+        Self {
+            engine: resolved.engine,
+            entities: resolved.entities,
+            local_fn: resolved.local_fn,
+            in_game_fn: resolved.in_game_fn,
+            entity_fn: resolved.entity_fn,
+            offsets: resolved.offsets,
+        }
     }
     fn connected(&self) -> bool {
         // SAFETY: 仅从已验证的游戏帧回调调用，目标版本函数返回规范 bool 字节。
@@ -114,7 +89,7 @@ impl Bindings {
         if object == 0 {
             return Ok((None, None));
         }
-        // 来自本版本 GetClientEntity 的 (index - 0x4001) * 32 槽位访问；同时核对实际对象基址。
+        // 来自已匹配指令特征的 GetClientEntity 的 (index - 0x4001) * 32 槽位访问；同时核对实际对象基址。
         let record = self
             .entities
             .checked_sub(0x80020)
@@ -258,22 +233,17 @@ pub struct Hook {
     original: usize,
 }
 impl Hook {
-    pub fn install() -> io::Result<Self> {
+    pub fn install(resolved: native::Resolved) -> io::Result<Self> {
         LazyLock::force(&EVENTS);
         LazyLock::force(&STATE);
-        let bindings = Bindings::prepare()?;
-        let client = native::base("client.dll")?;
-        let original = method(client + 0x87a6d0, 35, client + 0x204300)?;
-        let table = pointer(client + 0x87a6d0)?;
-        if table != client + 0x6b8608 {
-            return Err(io::Error::other("客户端虚表不符"));
-        }
+        let bindings = Bindings::prepare(&resolved);
+        let original = resolved.frame_fn;
         BINDINGS
             .set(bindings)
             .map_err(|_| io::Error::other("采样上下文已初始化"))?;
         ORIGINAL.store(original, Ordering::Release);
         let hook = Self {
-            slot: table + 35 * 8,
+            slot: resolved.frame_slot,
             original,
         };
         if let Err(error) = replace(hook.slot, original, frame as *const () as usize) {
