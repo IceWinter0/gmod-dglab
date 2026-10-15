@@ -24,13 +24,16 @@ if (!$SkipBuild) {
 Assert-Amd64 $appBinary $false
 Assert-Amd64 $collectorBinary $true
 $releaseRoot = Join-Path $projectRoot 'target/releases'
-$packageName = if ($Release) { 'gmod-dglab-0.1.0-windows-x64' } else { 'gmod-dglab-0.1.0-windows-x64-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') }
+$versionMatch = [regex]::Match([IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.toml')), '(?m)^version\s*=\s*"([^"]+)"\s*$')
+if (!$versionMatch.Success) { throw '无法读取工作区版本号' }
+$packageBase = 'gmod-dglab-' + $versionMatch.Groups[1].Value + '-windows-x64'
+$packageName = if ($Release) { $packageBase } else { $packageBase + '-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') }
 $packageDir = Join-Path $releaseRoot $packageName
 if (Test-Path -LiteralPath $packageDir) { throw '发布目录已经存在，请稍后重试；不会覆盖旧包' }
 New-Item -ItemType Directory -Path (Join-Path $packageDir 'bin') -Force | Out-Null
 Copy-Item -LiteralPath $appBinary -Destination (Join-Path $packageDir 'gmod-dglab.exe')
 Copy-Item -LiteralPath $collectorBinary -Destination (Join-Path $packageDir 'bin/gmod_dglab_collector.dll')
-foreach ($licenseFile in @('README.md','LICENSE','LICENSE-MIT','THIRD_PARTY_NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $licenseFile) -Destination (Join-Path $packageDir $licenseFile) }
+foreach ($licenseFile in @('README.md','LICENSE','THIRD_PARTY_NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $licenseFile) -Destination (Join-Path $packageDir $licenseFile) }
 $hashLines = foreach ($fileName in @('gmod-dglab.exe','bin/gmod_dglab_collector.dll')) { (Get-FileHash -LiteralPath (Join-Path $packageDir $fileName) -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $fileName }
 [IO.File]::WriteAllLines((Join-Path $packageDir 'SHA256SUMS.txt'), $hashLines, [Text.UTF8Encoding]::new($false))
 $binaryZip = Join-Path $releaseRoot ($packageName + '.zip')
@@ -56,7 +59,7 @@ function Add-SourceTree([string]$DirectoryPath) {
     }
 }
 try {
-    foreach ($rootFile in @('Cargo.toml','Cargo.lock','.gitignore','README.md','LICENSE','LICENSE-MIT','THIRD_PARTY_NOTICES.md')) { Add-SourceFile (Join-Path $projectRoot $rootFile) }
+    foreach ($rootFile in @('Cargo.toml','Cargo.lock','.gitignore','README.md','LICENSE','THIRD_PARTY_NOTICES.md')) { Add-SourceFile (Join-Path $projectRoot $rootFile) }
     foreach ($sourceDirectory in @('crates','desktop','scripts')) { Add-SourceTree (Join-Path $projectRoot $sourceDirectory) }
 } finally { $archive.Dispose() }
 $zipHashes = foreach ($archivePath in @($binaryZip, $sourceZip)) { (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + [IO.Path]::GetFileName($archivePath) }
