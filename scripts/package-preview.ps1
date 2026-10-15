@@ -24,7 +24,10 @@ if (!$SkipBuild) {
 Assert-Amd64 $appBinary $false
 Assert-Amd64 $collectorBinary $true
 $releaseRoot = Join-Path $projectRoot 'target/releases'
-$packageName = if ($Release) { 'gmod-dglab-0.1.0-windows-x64' } else { 'gmod-dglab-0.1.0-windows-x64-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') }
+$versionMatch = [regex]::Match([IO.File]::ReadAllText((Join-Path $projectRoot 'Cargo.toml')), '(?m)^version\s*=\s*"([^"]+)"\s*$')
+if (!$versionMatch.Success) { throw '无法读取工作区版本号' }
+$packageBase = 'gmod-dglab-' + $versionMatch.Groups[1].Value + '-windows-x64'
+$packageName = if ($Release) { $packageBase } else { $packageBase + '-preview-' + [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') }
 $packageDir = Join-Path $releaseRoot $packageName
 if (Test-Path -LiteralPath $packageDir) { throw '发布目录已经存在，请稍后重试；不会覆盖旧包' }
 New-Item -ItemType Directory -Path (Join-Path $packageDir 'bin') -Force | Out-Null

@@ -12,7 +12,7 @@
 
 ### 使用教程
 
-1. 前往 [Releases](https://github.com/IceWinter0/gmod-dglab/releases/latest) 下载 `gmod-dglab-0.1.0-windows-x64.zip` 并完整解压（请保留 `bin` 目录），运行 `gmod-dglab.exe`。
+1. 前往 [Releases](https://github.com/IceWinter0/gmod-dglab/releases/latest) 下载 `gmod-dglab-0.1.1-windows-x64.zip` 并完整解压（请保留 `bin` 目录），运行 `gmod-dglab.exe`。
 2. 启动 GMod x64 并进入游戏地图，点击面板顶部的“连接游戏”；如果连接失败，可以点击“重新连接”重试。
 3. 在手机上打开 DG-Lab APP 连接郊狼 3.0，开启 **SOCKET 控制**；在面板中选择对应的 APP 版本，点击“连接设备”并扫码配对。
 4. 等待设备状态同步后，勾选需要启用的 A/B 通道，设置基础强度、强度上限、映射率和当前波形，点击“保存规则”。

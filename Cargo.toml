@@ -3,7 +3,7 @@ members = ["crates/common", "crates/collector", "crates/diagnostic", "crates/con
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "GPL-3.0-only"
 repository = "https://github.com/IceWinter0/gmod-dglab"
